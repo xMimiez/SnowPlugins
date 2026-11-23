@@ -1,0 +1,44 @@
+import { type DevelopmentHandler } from "../handler";
+import type { NativeInspectorProbeEvidence } from "./capabilities";
+export declare function getNativeInspectorProbe(): NativeInspectorProbeEvidence | null;
+export declare const inspectionHandlers: {
+    "flux.types": () => import("../../protocol").SerializableValue | undefined;
+    "flux.listeners": () => import("../../protocol").SerializableValue | undefined;
+    "flux.capture": (params: import("../../protocol").OperationParameters<"flux.capture">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "flux.captures": (params: import("../../protocol").OperationParameters<"flux.captures">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "flux.events": (params: import("../../protocol").OperationParameters<"flux.events">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "flux.stop": (params: import("../../protocol").OperationParameters<"flux.stop">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "inspection.open": (params: import("../../protocol").OperationParameters<"inspection.open">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "inspection.sessions": (_params: import("../../protocol").OperationParameters<"inspection.sessions">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "inspection.get": (params: import("../../protocol").OperationParameters<"inspection.get">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "inspection.close": (params: import("../../protocol").OperationParameters<"inspection.close">, context: import("../handler").DevelopmentHandlerContext) => Promise<import("../../protocol").SerializableValue | undefined>;
+    "inspect.properties": (params: import("../../protocol").OperationParameters<"inspect.properties">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "inspect.prototype": (params: import("../../protocol").OperationParameters<"inspect.prototype">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "inspect.release": (params: import("../../protocol").OperationParameters<"inspect.release">, context: import("../handler").DevelopmentHandlerContext) => {
+        released: boolean;
+    };
+    "inspect.releaseGroup": (params: import("../../protocol").OperationParameters<"inspect.releaseGroup">, context: import("../handler").DevelopmentHandlerContext) => {
+        released: number;
+    };
+    "interaction.timeline": (params: import("../../protocol").OperationParameters<"interaction.timeline">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "metro.modules": DevelopmentHandler<"metro.catalog">;
+    "metro.search": DevelopmentHandler<"metro.searchText">;
+    "metro.catalog": DevelopmentHandler<"metro.catalog">;
+    "metro.searchText": DevelopmentHandler<"metro.searchText">;
+    "metro.searchShape": (params: import("../../protocol").OperationParameters<"metro.searchShape">) => import("../../protocol").SerializableValue | undefined;
+    "metro.describe": (params: import("../../protocol").OperationParameters<"metro.describe">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "metro.load": (params: import("../../protocol").OperationParameters<"metro.load">) => import("../../protocol").SerializableValue | undefined;
+    "native.windows": DevelopmentHandler<"native.accessibility" | "native.windows">;
+    "native.accessibility": DevelopmentHandler<"native.accessibility" | "native.windows">;
+    "native.hitTest": (params: import("../../protocol").OperationParameters<"native.hitTest">, context: import("../handler").DevelopmentHandlerContext) => Promise<import("../../protocol").SerializableValue | undefined>;
+    "probes.attach": (params: import("../../protocol").OperationParameters<"probes.attach">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "probes.list": (params: import("../../protocol").OperationParameters<"probes.list">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "probes.captures": (params: import("../../protocol").OperationParameters<"probes.captures">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "probes.stop": (params: import("../../protocol").OperationParameters<"probes.stop">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "react.status": () => import("../../protocol").SerializableValue | undefined;
+    "react.roots": (params: import("../../protocol").OperationParameters<"react.roots">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "react.tree": (params: import("../../protocol").OperationParameters<"react.tree">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "react.element": (params: import("../../protocol").OperationParameters<"react.element">, context: import("../handler").DevelopmentHandlerContext) => import("../../protocol").SerializableValue | undefined;
+    "stores.list": (params: import("../../protocol").OperationParameters<"stores.list">) => Promise<import("../../protocol").SerializableValue | undefined>;
+    "stores.describe": (params: import("../../protocol").OperationParameters<"stores.describe">, context: import("../handler").DevelopmentHandlerContext) => Promise<import("../../protocol").SerializableValue | undefined>;
+};

@@ -1,0 +1,24 @@
+export declare const UserStore: any;
+export declare const SelectedChannelStore: {
+    getChannelId(): string | undefined;
+    getCurrentlySelectedChannelId?(): string | undefined;
+    addChangeListener(listener: () => void): void;
+    removeChangeListener(listener: () => void): void;
+};
+export declare const MessageStore: any;
+export declare const ChannelStore: any;
+export declare const PrivateChannelSortStore: any;
+export declare const ReadStateStore: any;
+export declare const GuildRoleStore: any;
+export declare const GuildMemberStore: any;
+export declare const PresenceStore: any;
+export declare const SessionsStore: any;
+export declare const StickersStore: any;
+export declare const SelectedGuildStore: any;
+export declare const EmojiStore: any;
+export declare const GuildStore: any;
+export declare const SortedGuildStore: any;
+export declare const UserGuildSettingsStore: any;
+export declare const GuildReadStateStore: any;
+export declare const PermissionsStore: any;
+export declare const UserSettingsProtoStore: any;

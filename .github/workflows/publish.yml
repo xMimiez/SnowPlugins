@@ -1,0 +1,82 @@
+name: Publish
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+    # A monthly publish refreshes the history artifact before it expires.
+    schedule:
+        - cron: "17 6 1 * *"
+
+permissions:
+    contents: read
+    actions: read
+    deployments: read
+
+concurrency:
+    group: snow-repository-pages
+    cancel-in-progress: false
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version-file: package.json
+            - run: bun install --frozen-lockfile
+            - run: bun run typecheck
+            - run: bun run build
+            - name: Download published history
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  previous=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=repository-history&per_page=1" --jq '.artifacts[0].workflow_run.id // empty')
+                  if [ -n "$previous" ]; then
+                    gh run download "$previous" --repo "$GITHUB_REPOSITORY" --name repository-history --dir previous
+                    echo "SNOW_HISTORY=--history previous" >> "$GITHUB_ENV"
+                    echo "SNOW_REQUIRE_HISTORY=--require-history" >> "$GITHUB_ENV"
+                    exit 0
+                  fi
+                  deployments=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1" --jq 'length')
+                  if [ "$deployments" -ne 0 ]; then
+                    echo "The repository-history artifact is missing. Restore it before publishing again." >&2
+                    exit 1
+                  fi
+            # Not strict: a changed plugin without a version bump warns and is not republished.
+            - run: bun run check:releases $SNOW_HISTORY $SNOW_REQUIRE_HISTORY --summary "$GITHUB_STEP_SUMMARY"
+            - run: bun run check:policy
+            # History wins: versions published before are copied back byte for byte.
+            - run: bun run build:index --no-build $SNOW_HISTORY --out site
+            - uses: actions/upload-artifact@v4
+              if: vars.SNOW_PAGES == 'true'
+              with:
+                  name: repository-history
+                  path: site
+                  if-no-files-found: error
+                  retention-days: ${{ vars.SNOW_HISTORY_RETENTION_DAYS || 90 }}
+            - uses: actions/upload-pages-artifact@v3
+              if: vars.SNOW_PAGES == 'true'
+              with:
+                  path: site
+    deploy:
+        if: vars.SNOW_PAGES == 'true'
+        needs: build
+        runs-on: ubuntu-latest
+        permissions:
+            pages: write
+            id-token: write
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - uses: actions/deploy-pages@v4
+              id: deployment
+            - name: Repository URL
+              env:
+                  PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+              run: |
+                  echo "Add this repository in Snow: ${PAGE_URL}repository.json" >> "$GITHUB_STEP_SUMMARY"

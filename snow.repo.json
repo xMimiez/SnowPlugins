@@ -1,0 +1,21 @@
+{
+    "schemaVersion": 1,
+    "name": "Mime's Snow Plugins",
+    "description": "Plugins for Snow by Mime | N0_.q3, with credit to every original author.",
+    "homepage": "https://github.com/xMimiez/SnowPlugins",
+    "icon": "PuzzlePieceIcon",
+    "authors": [
+        {
+            "name": "Mime | N0_.q3",
+            "id": "957164619061932045"
+        }
+    ],
+    "extras": {
+        "plugin": {},
+        "theme": {},
+        "font": {}
+    },
+    "channels": {},
+    "withdrawn": [],
+    "yanked": {}
+}

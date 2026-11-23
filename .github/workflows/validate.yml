@@ -1,0 +1,55 @@
+name: Validate
+
+# pull_request, never pull_request_target: contributor code is built here, with read-only access.
+on:
+    pull_request:
+
+permissions:
+    contents: read
+    actions: read
+
+jobs:
+    validate:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+                  fetch-depth: 0
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version-file: package.json
+            - run: bun install --frozen-lockfile
+            - run: bun run typecheck
+            - run: bun run build
+            - name: Download published history
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+              run: |
+                  previous=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=repository-history&per_page=1" --jq '.artifacts[0].workflow_run.id // empty' || true)
+                  if [ -n "$previous" ] && gh run download "$previous" --repo "$GITHUB_REPOSITORY" --name repository-history --dir previous; then
+                    echo "SNOW_HISTORY=--history previous" >> "$GITHUB_ENV"
+                    echo "SNOW_REQUIRE_HISTORY=--require-history" >> "$GITHUB_ENV"
+                    exit 0
+                  fi
+                  deployments=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1" --jq 'length' || echo 0)
+                  if [ "$deployments" -eq 0 ]; then exit 0; fi
+                  if [ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+                    echo "::warning::The published history is not readable from this fork; Publish enforces the release checks."
+                    exit 0
+                  fi
+                  echo "The repository-history artifact is missing. Restore it before publishing again." >&2
+                  exit 1
+            - name: Check releases
+              env:
+                  BASE_REF: ${{ github.base_ref }}
+              run: bun run check:releases $SNOW_HISTORY $SNOW_REQUIRE_HISTORY --strict --only-changed "origin/$BASE_REF" --summary "$GITHUB_STEP_SUMMARY"
+            - run: bun run build:index --no-build $SNOW_HISTORY --strict --out .snow-review
+            - run: bun run check:policy --summary "$GITHUB_STEP_SUMMARY"
+            - run: bun run build:readme --check
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: review-output
+                  path: .snow-review
+                  if-no-files-found: error

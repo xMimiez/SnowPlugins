@@ -1,0 +1,225 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "allowJs": false,
+    "skipLibCheck": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "lib": [
+      "ESNext"
+    ],
+    "types": [],
+    "resolveJsonModule": true,
+    "paths": {
+      "@snow-internal/client/*": [
+        "./types/snow/source/apps/client/src/snow/*"
+      ],
+      "@snow-internal/api": [
+        "./types/snow/source/packages/api/src/runtime/index.d.ts"
+      ],
+      "@snow-internal/api/lib": [
+        "./types/snow/source/packages/api/src/lib/index.d.ts"
+      ],
+      "@snow-internal/api/lib/*": [
+        "./types/snow/source/packages/api/src/lib/*"
+      ],
+      "@snow-internal/api/*": [
+        "./types/snow/source/packages/api/src/runtime/*"
+      ],
+      "@snow-internal/core/plugins": [
+        "./types/snow/source/packages/core/src/plugins/index.d.ts"
+      ],
+      "@snow-internal/core/plugins/*": [
+        "./types/snow/source/packages/core/src/plugins/*"
+      ],
+      "@snow-internal/core/plugins/types": [
+        "./types/snow/source/packages/core/src/plugins/types.d.ts"
+      ],
+      "@snow-internal/core/recovery/*": [
+        "./types/snow/source/packages/core/src/recovery/*"
+      ],
+      "@snow-internal/core/authors": [
+        "./types/snow/source/packages/core/src/authors.d.ts"
+      ],
+      "@snow-internal/core/runtime": [
+        "./types/snow/source/packages/core/src/runtime/index.d.ts"
+      ],
+      "@snow-internal/core/settings": [
+        "./types/snow/source/packages/core/src/settings.d.ts"
+      ],
+      "@snow-internal/core/storage": [
+        "./types/snow/source/packages/core/src/storage/index.d.ts"
+      ],
+      "@snow-internal/core/storage/*": [
+        "./types/snow/source/packages/core/src/storage/*"
+      ],
+      "@snow-internal/discord": [
+        "./types/snow/source/packages/discord/src/index.d.ts"
+      ],
+      "@snow-internal/discord/*": [
+        "./types/snow/source/packages/discord/src/*"
+      ],
+      "@snow-internal/dev/protocol": [
+        "./types/snow/source/packages/dev/src/protocol/index.d.ts"
+      ],
+      "@snow-internal/dev/runtime": [
+        "./types/snow/source/packages/dev/src/runtime/index.d.ts"
+      ],
+      "@snow-internal/dev/sdk": [
+        "./types/snow/source/packages/dev/src/sdk/index.d.ts"
+      ],
+      "@snow-internal/native": [
+        "./types/snow/source/packages/native/src/index.d.ts"
+      ],
+      "@snow-internal/native/*": [
+        "./types/snow/source/packages/native/src/*"
+      ],
+      "@snow-internal/ui": [
+        "./types/snow/source/packages/ui/src/index.d.ts"
+      ],
+      "@snow-internal/ui/*": [
+        "./types/snow/source/packages/ui/src/*"
+      ],
+      "@snow-internal/plugin-core/*": [
+        "./types/snow/source/plugins/core/*"
+      ],
+      "@snow-internal/plugin-feature/*": [
+        "./types/snow/source/plugins/features/*"
+      ],
+      "react": [
+        "./types/snow/vendor/@types/react/index.d.ts"
+      ],
+      "react/*": [
+        "./types/snow/vendor/@types/react/*"
+      ],
+      "react-native": [
+        "./types/snow/vendor/react-native/types/index.d.ts"
+      ],
+      "@snow/plugin": [
+        "./types/snow/plugin.d.ts"
+      ],
+      "@snow/core/storage": [
+        "./types/snow/storage.d.ts"
+      ],
+      "@snow/api/patcher": [
+        "./types/snow/api-patcher.d.ts"
+      ],
+      "@snow/api/commands": [
+        "./types/snow/api-commands.d.ts"
+      ],
+      "@snow/api/flux": [
+        "./types/snow/api-flux.d.ts"
+      ],
+      "@snow/api/react": [
+        "./types/snow/api-react.d.ts"
+      ],
+      "@snow/api/react/jsx": [
+        "./types/snow/api-react-jsx.d.ts"
+      ],
+      "@snow/ui": [
+        "./types/snow/ui.d.ts"
+      ],
+      "@snow/ui/sheets": [
+        "./types/snow/ui-sheets.d.ts"
+      ],
+      "@snow/ui/settings": [
+        "./types/snow/ui-settings.d.ts"
+      ],
+      "@snow/native/fs": [
+        "./types/snow/native-fs.d.ts"
+      ],
+      "@snow/native": [
+        "./types/snow/native.d.ts"
+      ],
+      "@snow/api": [
+        "./types/snow/api.d.ts"
+      ],
+      "@snow/ui/alerts": [
+        "./types/snow/ui-alerts.d.ts"
+      ],
+      "@snow/discord": [
+        "./types/snow/source/packages/discord/src/index.d.ts"
+      ],
+      "@snow/discord/common": [
+        "./types/snow/source/packages/discord/src/common"
+      ],
+      "@snow/discord/common/stores": [
+        "./types/snow/source/packages/discord/src/common/stores"
+      ],
+      "@snow/discord/common/components": [
+        "./types/snow/source/packages/discord/src/common/components"
+      ],
+      "@snow/discord/wrappers": [
+        "./types/snow/source/packages/discord/src/wrappers"
+      ],
+      "@snow/discord/finders": [
+        "./types/snow/source/packages/discord/src/finders"
+      ],
+      "@snow/discord/filters": [
+        "./types/snow/source/packages/discord/src/filters"
+      ],
+      "@snow/discord/factories": [
+        "./types/snow/source/packages/discord/src/factories"
+      ],
+      "@snow/discord/lazy": [
+        "./types/snow/source/packages/discord/src/lazy"
+      ],
+      "@snow/ui/components": [
+        "./types/snow/source/packages/ui/src/components"
+      ],
+      "@snow/ui/components/wrappers": [
+        "./types/snow/source/packages/ui/src/components/wrappers"
+      ],
+      "@snow/ui/components/Buttons": [
+        "./types/snow/source/packages/ui/src/components/Buttons"
+      ],
+      "@snow/ui/components/Icon": [
+        "./types/snow/source/packages/ui/src/components/Icon"
+      ],
+      "@snow/ui/components/RowIcon": [
+        "./types/snow/source/packages/ui/src/components/RowIcon"
+      ],
+      "@snow/ui/components/SettingsPage": [
+        "./types/snow/source/packages/ui/src/components/SettingsPage"
+      ],
+      "@snow/ui/components/TextInputRow": [
+        "./types/snow/source/packages/ui/src/components/TextInputRow"
+      ],
+      "@snow/ui/components/color": [
+        "./types/snow/source/packages/ui/src/components/color"
+      ],
+      "@snow/ui/styles": [
+        "./types/snow/source/packages/ui/src/styles"
+      ],
+      "@snow/ui/toasts": [
+        "./types/snow/source/packages/ui/src/toasts"
+      ],
+      "@snow/api/commands/types": [
+        "./types/snow/source/packages/api/src/runtime/commands/types"
+      ],
+      "@snow/api/assets": [
+        "./types/snow/source/packages/api/src/runtime/assets"
+      ],
+      "@snow/api/lib/utils": [
+        "./types/snow/source/packages/api/src/lib/utils"
+      ],
+      "@snow/api/lib/utils/lazy": [
+        "./types/snow/source/packages/api/src/lib/utils/lazy"
+      ],
+      "*": [
+        "./types/snow/vendor/*",
+        "./types/snow/vendor/@types/*"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "plugins",
+    "types/snow/source/apps/client/src/global.d.ts",
+    "types/snow/source/apps/client/src/modules.d.ts",
+    "types/snow/library.d.ts"
+  ]
+}

@@ -1,0 +1,10 @@
+import type { PluginModule } from "./source/packages/core/src/plugins/sdk/definition";
+export declare const definePlugin: PluginModule["definePlugin"];
+export declare const plugin: PluginModule["plugin"];
+export declare const host: PluginModule["host"];
+export declare const signal: PluginModule["signal"];
+export declare const logger: PluginModule["logger"];
+export declare const onDispose: PluginModule["onDispose"];
+export declare const reportError: PluginModule["reportError"];
+export type { ExternalPlugin, PluginHost, PluginIdentity } from "./source/packages/core/src/plugins/sdk/definition";
+export type { LibraryConsumer } from "./source/packages/core/src/plugins/sdk/libraries";

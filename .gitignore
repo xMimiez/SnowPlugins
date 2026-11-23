@@ -1,0 +1,6 @@
+/node_modules/
+/dist/
+.snow-session.json
+previous/
+.snow-repo-out/
+.snow-repo-history/

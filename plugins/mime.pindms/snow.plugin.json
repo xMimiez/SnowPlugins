@@ -1,0 +1,24 @@
+{
+    "id": "mime.pindms",
+    "name": "Pin DMs",
+    "description": "Per-account DM categories, colors, ordering and collapsible sections for mobile.",
+    "version": "1.1.0",
+    "authors": [
+        {
+            "name": "Vendicated",
+            "id": "343383572805058560",
+            "role": "contributor"
+        },
+        {
+            "name": "Aria",
+            "role": "contributor"
+        },
+        {
+            "name": "Mime | N0_.q3",
+            "id": "957164619061932045"
+        }
+    ],
+    "license": "GPL-3.0-or-later",
+    "source": "https://github.com/xMimiez/SnowPlugins/tree/main/plugins/mime.pindms",
+    "entry": "src/index.ts"
+}

@@ -1,0 +1,11 @@
+type Bound = ReturnType<typeof import("./source/packages/core/src/plugins/sdk/bindings").createHostBindings>["@snow/ui"];
+export declare const components: Bound["components"];
+export declare const alerts: Bound["alerts"];
+export declare const sheets: Bound["sheets"];
+export declare const styles: Bound["styles"];
+export declare const toasts: Bound["toasts"];
+export declare const Icon: Bound["Icon"];
+export declare const RowIcon: Bound["RowIcon"];
+export declare const openPluginInstaller: Bound["openPluginInstaller"];
+export declare const settings: Bound["settings"];
+export type * from "./source/packages/ui/src/index";
