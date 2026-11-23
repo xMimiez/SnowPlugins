@@ -2,7 +2,7 @@
 
 # Snow Plugins
 
-Plugins for Snow, built with the Snow plugin SDK and published as a Snow repository.
+Plugins for Snow, built with the Snow plugin SDK.
 
 [![Snowclient](https://img.shields.io/badge/Snowclient-neoarz%2Fsnow-5865F2?style=flat-square)](https://github.com/neoarz/snow)
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-227c57?style=flat-square)](./LICENSE)
