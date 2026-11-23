@@ -14,7 +14,7 @@ function load(id, { modules = [], saved = {} } = {}) {
     assert(fs.existsSync(dir), `dist/${id} is missing; run bun run build`);
     const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
     const bytes = fs.readFileSync(path.join(dir, manifest.bundle.url));
-    const cleanups = [], patches = [], hooks = new Map(), rows = new Map(), sections = new Map(), control = new AbortController();
+    const cleanups = [], patches = [], hooks = new Map(), events = new Map(), rows = new Map(), sections = new Map(), control = new AbortController();
     const own = fn => { cleanups.push(fn); return fn; };
     const patch = kind => (key, parent, callback) => {
         // Snow refuses accessor properties, which is what a bundled `import * as` namespace exposes.
@@ -22,7 +22,8 @@ function load(id, { modules = [], saved = {} } = {}) {
         if (descriptor && !descriptor.configurable && (descriptor.get || !descriptor.writable)) throw new TypeError(`Cannot patch "${key}": it is fixed`);
         const original = parent[key];
         parent[key] = function (...args) {
-            if (kind === 'before') { callback(args); return original.apply(this, args); }
+            // Like Snow: an array returned from a before patch replaces the arguments.
+            if (kind === 'before') { const replaced = callback(args); return original.apply(this, Array.isArray(replaced) ? replaced : args); }
             if (kind === 'instead') return callback(args, (...next) => original.apply(this, next));
             const result = original.apply(this, args);
             return callback(args, result) ?? result;
@@ -37,7 +38,7 @@ function load(id, { modules = [], saved = {} } = {}) {
         react: React, 'react-native': RN, 'react/jsx-runtime': Object.freeze({ ...require('react/jsx-runtime') }),
         '@snow/api/patcher': { before: patch('before'), after: patch('after'), instead: patch('instead') },
         '@snow/api/commands': { registerCommand: () => () => {} },
-        '@snow/api/flux': { subscribe: () => () => {} },
+        '@snow/api/flux': { subscribe: (type, callback) => { events.set(type, callback); return () => events.delete(type); } },
         '@snow/api/react/jsx': { onJsxCreate: (name, callback) => hooks.set(name, callback), deleteJsxCreate: name => hooks.delete(name) },
         '@snow/discord': {
             findByProps: (...props) => modules.find(m => props.every(p => p in m)), findByPropsAll: () => [],
@@ -56,7 +57,7 @@ function load(id, { modules = [], saved = {} } = {}) {
         } },
     };
     const factory = vm.runInNewContext(bytes.toString(), { console, URL, AbortController, setTimeout, clearTimeout, setInterval, clearInterval, fetch: (...args) => globalThis.fetch(...args), Promise });
-    return { manifest, bytes, factory, host, hooks, patches, rows, sections, state: () => state,
+    return { manifest, bytes, factory, host, hooks, events, patches, rows, sections, state: () => state,
         create: () => factory.create(host),
         async stop(definition) { control.abort(); await definition.stop?.(); while (cleanups.length) cleanups.pop()(); } };
 }
@@ -118,4 +119,84 @@ test('Nighty Tab registers its settings entry with Snow and hooks the profile ba
     assert.equal(plugin.sections.get('NIGHTY_SECTION').rows.join(), 'NIGHTY');
     assert(plugin.hooks.has('YouScreenNavIconMeasurer'));
     await plugin.stop(definition);
+});
+
+// Discord's message record: `set` returns a changed copy.
+const record = fields => ({ ...fields, set(key, value) { return record({ ...this, [key]: value }); } });
+const rowOptions = { shouldObscureSpoiler: false, inlineEmbedMedia: true };
+
+test('Channel Spoilers covers the newest 50 messages once and never changes the stored message', async () => {
+    const channel = '123456789012345678', other = '223456789012345678';
+    const built = [];
+    const builder = { name: 'createMessageContent', default(input) { built.push(input); } };
+    const chat = { name: 'ChatManager', prototype: { determineChangeType(input) { return input.forceRender; } } };
+    const stored = Array.from({ length: 60 }, (_, i) => record({ id: String(1000 + i), channel_id: channel, content: '', embeds: [], attachments: [{ id: 'a' + i, filename: 'a.png', content_type: 'image/png', flags: 0 }] }));
+    let list = { toArray: () => stored };
+    const messages = { storeName: 'MessageStore', getMessages: id => id === channel ? list : undefined };
+    const draw = message => { builder.default({ message, options: rowOptions }); return built.pop(); };
+    const covered = message => draw(message).message.attachments.some(a => a.spoiler === true);
+    const plugin = load('mime.channelspoilers', { modules: [builder, chat, messages], saved: { channels: [channel] } });
+    const definition = plugin.create();
+    await definition.start();
+
+    assert.deepEqual(stored.filter(covered).map(m => m.id), stored.slice(-50).map(m => m.id));
+    assert.equal(covered(stored[59]), true, 'still covered when the row is drawn again in the same visit');
+    assert.equal(stored[59].attachments[0].spoiler, undefined, 'the stored message is untouched');
+    assert.equal(plugin.state().seen[channel], '1059');
+    const elsewhere = record({ id: '2000', channel_id: other, attachments: [{ filename: 'a.png' }] });
+    assert.equal(draw(elsewhere).message, elsewhere);
+
+    plugin.events.get('CHANNEL_SELECT')({});
+    assert.equal(stored.some(covered), false, 'reopening the chat covers nothing again');
+    stored.push(record({ id: '1060', channel_id: channel, content: 'look https://tenor.com/view/cat',
+        attachments: [{ id: 'p', filename: 'a.png', flags: 0 }, { id: 't', filename: 'd.txt' }],
+        embeds: [{ type: 'gifv', url: 'https://tenor.com/view/cat', video: { url: 'https://media.tenor.com/cat.mp4', width: 120, height: 80 } }, { type: 'rich', title: 'kept' }] }));
+    list = { toArray: () => stored };
+    const before = JSON.stringify(stored[60]);
+    const first = draw(stored[60]);
+    assert.equal(first.options.shouldObscureSpoiler, true);
+    assert.equal(first.message.content, 'look ||https://tenor.com/view/cat||');
+    assert.deepEqual(first.message.attachments.map(a => [a.filename, a.spoiler, a.flags]), [['a.png', true, 8], ['d.txt', undefined, undefined], ['SPOILER_gif.mp4', true, 8]]);
+    // The bundle runs in its own realm, so its arrays are copied before comparing.
+    assert.deepEqual(Array.from(first.message.embeds, e => e.type), ['rich']);
+    assert.equal(JSON.stringify(draw(stored[60]).message), JSON.stringify(first.message), 'drawing the row again gives the same row, not a second layer');
+    assert.equal(JSON.stringify(stored[60]), before);
+    assert.equal(covered(stored[59]), false);
+    assert.equal(chat.prototype.determineChangeType({ message: { id: '1060' } }), true, 'a row drawn before the plugin started is redrawn once');
+    assert.equal(chat.prototype.determineChangeType({ message: { id: '1060' } }), undefined);
+
+    await plugin.stop(definition);
+    assert.equal(draw(stored[60]).message, stored[60]);
+    // The saved mark keeps old messages uncovered after a restart.
+    const again = load('mime.channelspoilers', { modules: [builder, chat, messages], saved: plugin.state() });
+    const restarted = again.create();
+    await restarted.start();
+    assert.equal(stored.some(covered), false);
+    await again.stop(restarted);
+});
+
+test('BlurNSFW covers media in age-restricted channels and their threads', async () => {
+    const built = [];
+    const builder = { name: 'createMessageContent', default(input) { built.push(input); } };
+    const channels = { storeName: 'ChannelStore', getChannel: id => ({ nsfw: { isNSFW: () => true }, thread: { isNSFW: () => false, parent_id: 'nsfw' }, safe: { isNSFW: () => false } })[id] };
+    const draw = message => { builder.default({ message, options: rowOptions }); return built.pop(); };
+    const image = channel => record({ id: '1', channel_id: channel, content: '', embeds: [], attachments: [{ filename: 'a.png', content_type: 'image/png', flags: 0 }, { filename: 'notes.txt' }] });
+    const plugin = load('mime.blurnsfw', { modules: [builder, channels] });
+    const definition = plugin.create();
+    await definition.start();
+    for (const channel of ['nsfw', 'thread']) {
+        const input = draw(image(channel));
+        assert.deepEqual(input.message.attachments.map(a => a.spoiler), [true, undefined], channel);
+        assert.equal(input.options.shouldObscureSpoiler, true);
+        assert.equal(input.options.inlineEmbedMedia, false);
+    }
+    const safe = image('safe');
+    assert.equal(draw(safe).message, safe);
+    assert.equal(draw(record({ id: '2', channel_id: 'nsfw', attachments: [], embeds: [{ type: 'image' }] })).options.inlineEmbedMedia, false);
+    plugin.state().blurAllChannels = true;
+    assert.equal(draw(safe).message.attachments[0].flags, 8);
+    await plugin.stop(definition);
+    assert.equal(draw(image('nsfw')).message.attachments[0].spoiler, undefined);
+    const missing = load('mime.blurnsfw', { modules: [channels] });
+    await assert.rejects(async () => missing.create().start(), /content builder/);
 });

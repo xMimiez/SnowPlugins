@@ -153,6 +153,21 @@ export function createRuntime(defaults: Settings = {}) {
                 try { return transform(result, name) ?? result; } catch (error) { r.error(`createElement ${name}`, error); }
             });
         },
+        // Discord builds each native chat row from this input. A returned copy replaces it for that row only.
+        patchMessageInput(transform: (input: Any) => Any) {
+            const redrawn = new Set<string>();
+            let failed = false;
+            // Rows drawn before the plugin started are redrawn once, so the change shows without reopening the chat.
+            r.patch("before", r.byName("ChatManager")?.prototype, "determineChangeType", (args: Any[]) => {
+                const id = args[0]?.message?.id;
+                if (r.active && id && !redrawn.has(id)) { redrawn.add(id); args[0].forceRender = true; }
+            });
+            return r.patch("before", r.byName("createMessageContent", true), "default", (args: Any[]) => {
+                if (!r.active) return;
+                try { const next = transform(args[0]); if (next) return [next, ...args.slice(1)]; }
+                catch (error) { if (!failed) console.error(`[${plugin.name}] Could not change a chat row`, error); failed = true; }
+            });
+        },
         patchRows(transform: (rows: Any) => Any) {
             const apply = (value: Any) => {
                 try {
@@ -198,6 +213,35 @@ export function createRuntime(defaults: Settings = {}) {
     };
     onDispose(() => { for (const abort of requests) abort(); requests.clear(); r.changed(); listeners.clear(); });
     return r;
+}
+
+const MEDIA_TYPE = /^(image|video)\//i, MEDIA_FILE = /\.(png|jpe?g|gif|webp|mp4|mov|webm)$/i;
+
+/** What `spoilerInput` lets a plugin change on its copy of the message before the row is built. */
+export interface MessageDraft { id: string; content: Any; embeds: Any; attachments: Any[] }
+
+/**
+ * A copy of the row input whose image and video attachments are spoilers, so Discord draws its own
+ * tap-to-reveal cover. The stored message is never written to, so nothing builds up between renders.
+ * `edit` may change the copied content, embeds and attachments first. Undefined keeps the input.
+ */
+// shortcut: media in bot gallery components is not covered, add it when a channel needs it.
+export function spoilerInput(input: Any, edit?: (draft: MessageDraft) => void): Any {
+    const message = input?.message;
+    if (typeof message?.set !== "function" || !input.options) return;
+    const attachments: Any[] = Array.isArray(message.attachments) ? message.attachments : [];
+    const draft: MessageDraft = {
+        id: message.id, content: message.content, embeds: message.embeds,
+        // Discord reads the spoiler from bit 8 of the attachment flags.
+        attachments: attachments.map(item => MEDIA_TYPE.test(item?.content_type) || MEDIA_FILE.test(item?.filename) ? { ...item, spoiler: true, flags: item.flags | 8 } : item),
+    };
+    edit?.(draft);
+    const changed = draft.attachments.length !== attachments.length || draft.attachments.some((item, index) => item !== attachments[index]);
+    if (!changed && draft.content === message.content && draft.embeds === message.embeds) return;
+    let next = changed ? message.set("attachments", draft.attachments) : message;
+    if (draft.content !== message.content) next = next.set("content", draft.content);
+    if (draft.embeds !== message.embeds) next = next.set("embeds", draft.embeds);
+    return { ...input, message: next, options: { ...input.options, shouldObscureSpoiler: true } };
 }
 
 export function ui(r: Runtime) {
