@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snow/icon-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/snow/icon-light.svg">
+    <img src="assets/snow/icon-light.svg" alt="Snow" width="112" />
+  </picture>
+</p>
+
 <div align="center">
 
 # Snow Plugins
@@ -43,4 +51,5 @@ Snow Plugins is licensed under the [PolyForm Noncommercial License 1.0.0](./LICE
 - `plugins/mime.pindms/` is licensed under GPL-3.0-or-later, the license of the Equicord code it is ported from.
 - `plugins/mime.nitrosniper/` is licensed under MIT, the license of the NitroSniper code it is ported from.
 - `shared/action-sheet.ts` is licensed under MPL-2.0.
+- The Snow logo is licensed under the [MIT License](./assets/snow/LICENSE).
 - The build scripts at the repository root and `types/` are generated from Snow and keep Snow's licenses; see `types/snow/notices/`.

@@ -254,7 +254,7 @@ function NightyTab(r: Runtime) {
     return h(
       RN.View,
       { style: frame },
-      !src ? h(Text, null, "Set a valid HTTP or HTTPS URL in Nighty Tab settings.") : !WebView ? h(Text, null, "WebView is unavailable in this Snow build.") : h(WebView, {
+      !src ? h(Text, null, "Add your Nighty panel URL in Nighty Tab settings.") : !WebView ? h(Text, null, "WebView is unavailable in this Snow build.") : h(WebView, {
         key: `${src}:${savedSession ? "signed-in" : "signed-out"}:${store.autoLogin && store.loginUsername && store.loginPassword ? "auto" : "manual"}`,
         ref: webViewRef,
         source: { uri: src, ...savedSession ? { headers: { Cookie: `access_token=${savedSession}` } } : {} },
@@ -343,7 +343,7 @@ function NightyTab(r: Runtime) {
       sectionLabel("Nighty website"),
       card(h(RN.View, { style: { padding: 14 } },
         field({ value: store.url, placeholder: "https://nighty.example", onChange: (value: Any) => r.set("url", value), keyboardType: "url" }),
-        store.url && !pageUrl(store.url) ? h(RN.Text, { style: { color: colors.danger, fontSize: 13, lineHeight: 18, marginTop: 8 } }, "Use an HTTP or HTTPS address without a username or password.") : null,
+        store.url && !pageUrl(store.url) ? h(RN.Text, { style: { color: colors.danger, fontSize: 13, lineHeight: 18, marginTop: 8 } }, "Enter a valid Nighty panel URL without a username or password.") : null,
         h(RN.Pressable || RN.TouchableOpacity, { accessibilityRole: "button", onPress: () => { if (!openNighty()) openSheet(); }, style: ({ pressed }: Any = {}) => ({ height: 48, borderRadius: 12, backgroundColor: pressed ? "#4752C4" : colors.accent, alignItems: "center", justifyContent: "center", marginTop: 12 }) }, h(RN.Text, { style: { color: "#FFFFFF", fontSize: 16, lineHeight: 20, fontWeight: "700" } }, "Open Nighty")),
         h(RN.Text, { style: { color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: 8 } }, sessionToken() ? "Login saved for this address." : "Sign in once to save your login.")
       )),
