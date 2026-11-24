@@ -41,5 +41,6 @@ Repo managed by [xMimiez](https://github.com/xMimiez).
 Snow Plugins is licensed under the [PolyForm Noncommercial License 1.0.0](./LICENSE), with these exceptions:
 
 - `plugins/mime.pindms/` is licensed under GPL-3.0-or-later, the license of the Equicord code it is ported from.
+- `plugins/mime.nitrosniper/` is licensed under MIT, the license of the NitroSniper code it is ported from.
 - `shared/action-sheet.ts` is licensed under MPL-2.0.
 - The build scripts at the repository root and `types/` are generated from Snow and keep Snow's licenses; see `types/snow/notices/`.
