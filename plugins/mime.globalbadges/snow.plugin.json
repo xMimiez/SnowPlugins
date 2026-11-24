@@ -2,7 +2,7 @@
     "id": "mime.globalbadges",
     "name": "GlobalBadges",
     "description": "Profile badges from EquiBadges (all client mods) and ObaWorkshop BadgeVault.",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "authors": [
         {
             "name": "domi.btnr",

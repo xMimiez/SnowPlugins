@@ -1,0 +1,23 @@
+{
+    "id": "mime.openinapp",
+    "name": "OpenInApp",
+    "description": "Open Steam, Telegram, Instagram, TikTok and other service links in their apps.",
+    "version": "1.3.0",
+    "authors": [
+        {
+            "name": "Vendicated",
+            "id": "343383572805058560"
+        },
+        {
+            "name": "Chloe",
+            "id": "1084592643784331324"
+        },
+        {
+            "name": "Mime | N0_.q3",
+            "id": "957164619061932045"
+        }
+    ],
+    "license": "GPL-3.0-or-later",
+    "source": "https://github.com/xMimiez/SnowPlugins/tree/main/plugins/mime.openinapp",
+    "entry": "src/index.ts"
+}

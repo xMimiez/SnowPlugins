@@ -1,0 +1,23 @@
+{
+    "id": "mime.volumebooster",
+    "name": "VolumeBooster",
+    "description": "Optional voice output boost without patching Discord sliders.",
+    "version": "1.3.0",
+    "authors": [
+        {
+            "name": "Nuckyz",
+            "id": "235834946571337729"
+        },
+        {
+            "name": "sadan",
+            "id": "521819891141967883"
+        },
+        {
+            "name": "Mime | N0_.q3",
+            "id": "957164619061932045"
+        }
+    ],
+    "license": "GPL-3.0-or-later",
+    "source": "https://github.com/xMimiez/SnowPlugins/tree/main/plugins/mime.volumebooster",
+    "entry": "src/index.ts"
+}

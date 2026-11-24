@@ -1,0 +1,19 @@
+{
+    "id": "mime.decor",
+    "name": "Decor",
+    "description": "Browse and equip Decor avatar decorations.",
+    "version": "2.3.0",
+    "authors": [
+        {
+            "name": "Fiery",
+            "id": "890228870559698955"
+        },
+        {
+            "name": "Mime | N0_.q3",
+            "id": "957164619061932045"
+        }
+    ],
+    "license": "GPL-3.0-or-later",
+    "source": "https://github.com/xMimiez/SnowPlugins/tree/main/plugins/mime.decor",
+    "entry": "src/index.ts"
+}

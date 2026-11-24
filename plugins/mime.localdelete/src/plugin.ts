@@ -1,0 +1,417 @@
+// shortcut: ported from the untyped Bunny source; add types when this plugin is next reworked.
+// @ts-nocheck
+import { ui } from '../../../shared/runtime';
+
+const QUICK = /^(edit message|reply|forward)$/i;
+const DELETE = /^(delete|delete message)$/i;
+const CONTAINER = /ActionSheet|Modal|Navigator|FlashList|FlatList|SectionList|ScrollView|^(Chat|Channel|Guild|Screen|Home|Page)(Screen|View|Page)?$/i;
+
+function componentName(type) {
+    if (!type || typeof type === 'string') return '';
+    return type.displayName || type.name || type.type?.displayName || type.type?.name || '';
+}
+
+export function rowText(node) {
+    const chunks = [];
+    const visit = (value, depth) => {
+        if (depth > 8 || value == null || value === false || typeof value === 'function') return;
+        if (typeof value === 'string' || typeof value === 'number') {
+            chunks.push(String(value));
+            return;
+        }
+        if (Array.isArray(value)) {
+            value.forEach(entry => visit(entry, depth + 1));
+            return;
+        }
+        if (typeof value === 'object') {
+            if (value.props) visit(value.props.children, depth + 1);
+            visit(value.message, depth + 1);
+            visit(value.content, depth + 1);
+            if (!value.props) {
+                visit(value.label, depth + 1);
+                visit(value.text, depth + 1);
+            }
+        }
+    };
+    const props = node?.props || {};
+    visit(props.label, 0);
+    visit(props.title, 0);
+    visit(props.accessibilityLabel, 0);
+    visit(props.children, 0);
+    return chunks.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function labelId(node) {
+    const label = node?.props?.label || node?.props?.accessibilityLabel;
+    const id = label?.id || label?.key;
+    return id ? String(id).toUpperCase() : '';
+}
+
+export function messageIdOf(message) {
+    const id = message?.id ?? message?.messageId ?? message?.message_id;
+    if (id == null || id === '') return '';
+    return String(id);
+}
+
+export function messageLike(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value.author || value.author_id || value.authorId) return true;
+    if (typeof value.content === 'string') return true;
+    if (Array.isArray(value.attachments) || Array.isArray(value.embeds)) return true;
+    return false;
+}
+
+export function isLocalDeleteRow(node) {
+    if (!node || typeof node !== 'object') return false;
+    if (node.key === 'mime-local-delete' || node.props?.key === 'mime-local-delete') return true;
+    return /^local delete$/i.test(rowText(node));
+}
+
+export function isPlainDeleteRow(node) {
+    if (!node?.props || isLocalDeleteRow(node)) return false;
+    const id = labelId(node);
+    if (/HIDE|LOGGER|BETTER|SILENT|TEMP|LOCAL/.test(id)) return false;
+    if (id === 'DELETE' || id === 'DELETE_MESSAGE' || id === 'MESSAGE_DELETE') return true;
+    return DELETE.test(rowText(node));
+}
+
+function isQuickRow(node) {
+    const id = labelId(node);
+    if (/EDIT_MESSAGE|MESSAGE_REPLY|^REPLY$|FORWARD/.test(id)) return true;
+    return QUICK.test(rowText(node));
+}
+
+function isActionRow(node) {
+    if (!node?.props) return false;
+    const name = componentName(node.type);
+    if (name === 'ButtonRow' || name === 'ActionSheetRow' || name === 'FormRow' || name === 'ContextMenuRow') return true;
+    if (typeof node.props.onPress !== 'function' && typeof node.props.action !== 'function') return false;
+    return isQuickRow(node) || isPlainDeleteRow(node) || isLocalDeleteRow(node);
+}
+
+function findNode(node, pred, depth = 0) {
+    if (depth > 14 || node == null) return null;
+    if (pred(node)) return node;
+    if (Array.isArray(node)) {
+        for (const child of node) {
+            const found = findNode(child, pred, depth + 1);
+            if (found) return found;
+        }
+        return null;
+    }
+    const children = node?.props?.children;
+    return children == null ? null : findNode(children, pred, depth + 1);
+}
+
+function insertAt(React, node, row, mode, state, depth = 0) {
+    if (state.done || depth > 14 || node == null) return node;
+    if (Array.isArray(node)) {
+        let changed = false;
+        const mapped = [];
+        for (const child of node) {
+            if (state.done) {
+                mapped.push(child);
+                continue;
+            }
+            const next = insertAt(React, child, row, mode, state, depth + 1);
+            if (next !== child) changed = true;
+            mapped.push(next);
+        }
+        if (state.done) return changed ? mapped : node;
+        if (mode === 'delete') {
+            const index = mapped.findIndex(isPlainDeleteRow);
+            if (index >= 0) {
+                state.done = true;
+                const copy = mapped.slice();
+                copy.splice(index + 1, 0, row);
+                return copy;
+            }
+        }
+        if (mode === 'quick') {
+            let anchor = -1;
+            mapped.forEach((child, index) => { if (isQuickRow(child)) anchor = index; });
+            if (anchor >= 0) {
+                state.done = true;
+                const copy = mapped.slice();
+                copy.splice(anchor + 1, 0, row);
+                return copy;
+            }
+        }
+        if (mode === 'first' && mapped.some(isActionRow)) {
+            state.done = true;
+            return mapped.concat(row);
+        }
+        return changed ? mapped : node;
+    }
+    if (!React.isValidElement(node) || node.props == null) return node;
+    let changed = false;
+    const props = {};
+    for (const key of Object.keys(node.props)) {
+        const value = node.props[key];
+        if (value == null) continue;
+        const single = key === 'children' && !Array.isArray(value) && React.isValidElement(value);
+        if (!single && !Array.isArray(value) && !React.isValidElement(value)) continue;
+        const target = single ? [value] : value;
+        const next = insertAt(React, target, row, mode, state, depth + 1);
+        if (next !== target) {
+            props[key] = next;
+            changed = true;
+        }
+    }
+    return changed ? React.cloneElement(node, props) : node;
+}
+
+// The sheet colors a row from its variant. A new row with only a label stays white and inherits the trash icon.
+export function ClockIcon(props) {
+    const React = ClockIcon.React;
+    const RN = ClockIcon.RN || {};
+    const color = props?.color || props?.fill || '#F23F43';
+    const size = Number(props?.size || props?.width || props?.height) || 24;
+    const Svg = RN.Svg;
+    const Circle = RN.Circle;
+    const Path = RN.Path;
+    if (React && Svg && Circle && Path) {
+        return React.createElement(Svg, { width: size, height: size, viewBox: '0 0 24 24' },
+            React.createElement(Circle, { cx: '12', cy: '12', r: '8', stroke: color, strokeWidth: '2', fill: 'none' }),
+            React.createElement(Path, { d: 'M12 8.5V12l2.5 1.5', stroke: color, strokeWidth: '2', fill: 'none', strokeLinecap: 'round' }));
+    }
+    if (!React) return null;
+    return React.createElement(RN.Text || 'Text', {
+        accessibilityLabel: 'Clock',
+        style: { color, fontSize: Math.max(16, Math.round(size * 0.85)), lineHeight: size, width: size, textAlign: 'center' },
+    }, '◷');
+}
+ClockIcon.displayName = 'ClockIcon';
+
+function clockProp(React, current) {
+    const Icon = clockProp.Icon || ClockIcon;
+    if (typeof current === 'function') return Icon;
+    if (current && typeof current === 'object') return React.createElement(Icon, { color: '#F23F43', size: 24 });
+    return Icon;
+}
+
+export function placeLocalDelete(React, tree, onPress) {
+    if (!tree || typeof onPress !== 'function' || findNode(tree, isLocalDeleteRow)) return tree;
+    const sample = findNode(tree, isPlainDeleteRow) || findNode(tree, isActionRow);
+    if (!sample?.type) return tree;
+    const row = React.cloneElement(sample, {
+        key: 'mime-local-delete',
+        label: 'Local Delete',
+        title: 'Local Delete',
+        accessibilityLabel: 'Local Delete',
+        onPress,
+        icon: clockProp(React, sample.props?.icon),
+        Icon: clockProp.Icon || ClockIcon,
+        IconComponent: clockProp.Icon || ClockIcon,
+        leading: clockProp(React, sample.props?.leading ?? sample.props?.icon),
+        variant: 'danger',
+        destructive: true,
+        danger: true,
+        color: 'text-danger',
+    });
+    const state = { done: false };
+    const withDelete = insertAt(React, tree, row, 'delete', state);
+    if (state.done) return withDelete;
+    const withQuick = insertAt(React, withDelete, row, 'quick', state);
+    if (state.done) return withQuick;
+    const withFirst = insertAt(React, withQuick, row, 'first', state);
+    return state.done ? withFirst : tree;
+}
+
+function recordId(item) {
+    if (!item || typeof item !== 'object') return '';
+    if (messageLike(item)) return messageIdOf(item);
+    if (item.message && messageLike(item.message)) return messageIdOf(item.message);
+    return '';
+}
+
+export function filterBucket(bucket, hidden) {
+    if (!bucket || !hidden?.size) return bucket;
+    const keep = list => list.filter(item => {
+        const id = recordId(item);
+        return !id || !hidden.has(id);
+    });
+    if (Array.isArray(bucket)) {
+        const next = keep(bucket);
+        return next.length === bucket.length ? bucket : next;
+    }
+    const key = Array.isArray(bucket._array) ? '_array' : Array.isArray(bucket.messages) ? 'messages' : '';
+    if (!key) return bucket;
+    const next = keep(bucket[key]);
+    if (next.length === bucket[key].length) return bucket;
+    const copy = Object.assign(Object.create(Object.getPrototypeOf(bucket)), bucket);
+    copy[key] = next;
+    return copy;
+}
+
+export function dropStoredMessage(bucket, id) {
+    const list = Array.isArray(bucket) ? bucket : Array.isArray(bucket?._array) ? bucket._array : Array.isArray(bucket?.messages) ? bucket.messages : null;
+    if (!list) return false;
+    const index = list.findIndex(item => recordId(item) === id);
+    if (index < 0) return false;
+    list.splice(index, 1);
+    return true;
+}
+
+export function isHiddenRecord(value, hidden) {
+    if (!value || typeof value !== 'object' || !hidden?.size) return false;
+    if (messageLike(value) && hidden.has(messageIdOf(value))) return true;
+    if (value.message && messageLike(value.message) && hidden.has(messageIdOf(value.message))) return true;
+    return false;
+}
+
+export function stripHiddenRows(rows, hidden) {
+    if (!hidden?.size || rows == null) return rows;
+    const walk = (value, depth) => {
+        if (depth > 8 || value == null) return value;
+        if (Array.isArray(value)) {
+            let changed = false;
+            const next = [];
+            for (const item of value) {
+                const child = walk(item, depth + 1);
+                if (child == null) { changed = true; continue; }
+                if (child !== item) changed = true;
+                next.push(child);
+            }
+            return changed ? next : value;
+        }
+        if (typeof value !== 'object') return value;
+        return isHiddenRecord(value, hidden) ? null : value;
+    };
+    return walk(rows, 0);
+}
+
+export function isHiddenMessageElement(element, hidden) {
+    if (!element?.props || !hidden?.size) return false;
+    const name = componentName(element.type);
+    if (name && CONTAINER.test(name)) return false;
+    const props = element.props;
+    const candidates = [props.message, props.item];
+    for (const item of candidates) {
+        if (messageLike(item) && hidden.has(messageIdOf(item))) return true;
+    }
+    return false;
+}
+
+function channelIdOf(message) {
+    const value = message?.channel_id || message?.channelId || message?.getChannelId?.() || '';
+    return value == null ? '' : String(value);
+}
+
+export default function LocalDelete(r) {
+    const { h } = r;
+    const { Page, Text } = ui(r);
+    const hidden = new Set();
+    const refreshRows = [];
+    let rawGetMessages = null;
+    let messageStore = null;
+
+    function hide(message) {
+        const id = messageIdOf(message);
+        if (!id || !r.active) return;
+        hidden.add(id);
+        const channelId = channelIdOf(message);
+        if (rawGetMessages && channelId) {
+            try {
+                const bucket = rawGetMessages(channelId);
+                dropStoredMessage(bucket, id);
+                bucket?.remove?.(id);
+                bucket?._map?.delete?.(id);
+            } catch (error) { r.error('Local Delete', error); }
+        }
+        // The native list keeps its own copy. A local delete event is what makes that row leave.
+        try {
+            const payload = { type: 'MESSAGE_DELETE', id, channelId, messageId: id, mlDeleted: true };
+            const guildId = message?.guild_id || message?.guildId;
+            if (guildId) payload.guildId = guildId;
+            r.common?.FluxDispatcher?.dispatch?.(payload);
+        } catch (error) { r.error('Local Delete', error); }
+        try { messageStore?.emitChange?.(); } catch (error) { r.error('Local Delete', error); }
+        for (const refresh of refreshRows) {
+            try { refresh(); } catch (error) { r.error('Local Delete', error); }
+        }
+    }
+
+    return {
+        hide,
+        Settings() {
+            return h(Page, { title: 'Local Delete' },
+                h(Text, null, 'Local Delete sits under Delete Message on every message, including messages you did not send.'),
+                h(Text, { muted: true }, 'The message is removed on this device only. It comes back the next time Discord starts. Nothing is deleted on Discord’s servers.'));
+        },
+        start() {
+            ClockIcon.React = r.React;
+            // Reading one named export is safe. Spreading React Native enumerates PushNotificationIOS,
+            // and that getter builds NativeEventEmitter with a null module on Discord 354.
+            let text;
+            try { text = r.RN?.Text; } catch { text = undefined; }
+            ClockIcon.RN = { Text: text };
+            const svg = r.find('Svg', 'Path', 'Circle') || r.find('Svg', 'Path');
+            if (svg?.Svg) ClockIcon.RN = { Text: text, Svg: svg.Svg, Circle: svg.Circle, Path: svg.Path };
+            const icons = r.find('ClockIcon', 'TrashIcon') || r.find('ClockIcon');
+            if (typeof icons?.ClockIcon === 'function') clockProp.Icon = icons.ClockIcon;
+            messageStore = r.byStore('MessageStore') || r.find('getMessages', 'getMessage') || r.find('getMessages');
+            if (typeof messageStore?.getMessages === 'function') rawGetMessages = messageStore.getMessages.bind(messageStore);
+            if (messageStore && rawGetMessages) {
+                r.patch('after', messageStore, 'getMessages', (_args, result) => {
+                    if (!r.active) return;
+                    const next = filterBucket(result, hidden);
+                    return next === result ? undefined : next;
+                });
+            }
+            if (messageStore && typeof messageStore.getMessage === 'function') {
+                r.patch('instead', messageStore, 'getMessage', (args, original) => {
+                    const result = original(...args);
+                    if (!r.active || !result) return result;
+                    return hidden.has(messageIdOf(result)) ? undefined : result;
+                });
+            }
+            r.patchRows(rows => stripHiddenRows(rows, hidden));
+            let moduleKeys = [];
+            try { moduleKeys = Object.keys(r.RN?.NativeModules || {}); } catch { moduleKeys = []; }
+            for (const key of moduleKeys) {
+                if (key === 'PushNotificationIOS' || key === 'NativeEventEmitter') continue;
+                let native;
+                try { native = r.RN.NativeModules[key]; } catch { continue; }
+                if (typeof native?.updateRows !== 'function') continue;
+                let lastId;
+                let lastRows;
+                r.patch('after', native, 'updateRows', args => {
+                    lastId = args?.[0];
+                    lastRows = args?.[1];
+                });
+                refreshRows.push(() => {
+                    if (lastRows == null) return;
+                    native.updateRows(lastId, lastRows);
+                });
+            }
+            r.patch('after', r.React, 'createElement', (_args, result) => {
+                if (!r.active || !isHiddenMessageElement(result, hidden)) return;
+                return false;
+            });
+            const sheets = r.find('openLazy', 'hideActionSheet');
+            const patched = !!(sheets && r.patch('before', sheets, 'openLazy', args => {
+                const pending = args?.[0];
+                const key = args?.find(value => typeof value === 'string' && /MessageLongPress/i.test(value));
+                if (!key || !pending?.then) return;
+                args[0] = pending.then(module => {
+                    if (!r.active || typeof module?.default !== 'function' || module.default.prototype?.isReactComponent) return module;
+                    const Original = module.default;
+                    function WithLocalDelete(screenProps) {
+                        const tree = Original(screenProps);
+                        if (!r.active) return tree;
+                        const message = screenProps?.message;
+                        const press = () => {
+                            try { sheets.hideActionSheet?.(); } catch { /* The sheet can already be gone. */ }
+                            Promise.resolve().then(() => { if (r.active) hide(message); }).catch(error => { if (r.active) r.error('Local Delete', error); });
+                        };
+                        try { return placeLocalDelete(r.React, tree, press) ?? tree; }
+                        catch (error) { r.error('Local Delete', error); return tree; }
+                    }
+                    return { ...module, default: WithLocalDelete };
+                });
+            }));
+            r.status.messageMenu = patched ? 'patched' : 'unavailable';
+        },
+    };
+}

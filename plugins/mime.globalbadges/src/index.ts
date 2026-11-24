@@ -19,6 +19,10 @@ const serviceMap: Record<string, string> = {
 
 let byUser: Record<string, Badge[]> = {};
 const badgeProps: Record<string, Any> = {};
+const BADGE_PREFIX = 'gb-';
+const isAddedId = (value: unknown) => typeof value === 'string' && value.startsWith(BADGE_PREFIX);
+// Keyed by the badge itself, not its list position, so a refreshed or filtered list never points an old id at another badge.
+export const badgeId = (userId: string, badge: Pick<Badge, 'mod' | 'badge'>) => `${BADGE_PREFIX}${userId}-${encodeURIComponent(badge.mod)}-${encodeURIComponent(badge.badge)}`;
 
 function flattenEquiUser(entries: Any, showPrefix: boolean): Badge[] {
     if (!Array.isArray(entries)) return [];
@@ -134,20 +138,33 @@ function GlobalBadges(r: Runtime) {
     }
     function applyBadgeProps(element: Any) {
         const id = element?.props?.id;
-        if (typeof id !== 'string' || !id.startsWith('gb-')) return;
+        if (typeof id !== 'string' || !id.startsWith(BADGE_PREFIX)) return;
         const cached = badgeProps[id];
         if (!cached) return;
-        return React.cloneElement(element, {
-            source: cached.source,
-            label: cached.label,
-            id: cached.id,
-        });
+        return React.cloneElement(element, { source: cached.source, label: cached.label, id: cached.id });
+    }
+    // Discord saves badge order/visibility and fetches badge details by id; synthetic ids must never reach either.
+    function guardPendingBadges() {
+        const withoutAdded = (value: Any) => Array.isArray(value)
+            ? value.filter((item: Any) => !isAddedId(item) && !isAddedId(item?.id))
+            : value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype
+                ? Object.fromEntries(Object.entries(value).filter(([key]) => !isAddedId(key)))
+                : value;
+        const pending = r.find('setPendingBadgeDisplayOrder');
+        for (const key of ['setPendingBadgeDisplayOrder', 'setPendingBadgeVisibility', 'setPendingBadgeHiddenBadges']) {
+            if (typeof pending?.[key] === 'function') r.patch('instead', pending, key, (args: Any[], original: Any) => args.some(isAddedId) ? undefined : original(...args.map(withoutAdded)));
+        }
+        const fetcher = r.find('fetchBadge', 'fetchBadgeSummary');
+        for (const key of ['fetchBadge', 'fetchBadgeSummary']) {
+            if (typeof fetcher?.[key] === 'function') r.patch('instead', fetcher, key, (args: Any[], original: Any) => args.some(isAddedId) ? Promise.resolve(undefined) : original(...args));
+        }
     }
     return {
         async start() {
             await loadBadges(r, r.store.showPrefix);
             const refreshTimer = setInterval(() => { void loadBadges(r, r.store.showPrefix); }, REFRESH);
             r.own(() => clearInterval(refreshTimer));
+            guardPendingBadges();
             r.hook(['ProfileBadge', 'RenderBadge'], applyBadgeProps);
             r.hook(['BadgeRarityPill'], (element: Any) => element?.props?.rarity === ULTIMATE_RARITY ? h(UltimatePill) : undefined);
             const directory = r.byStore('BadgeDirectoryStore');
@@ -177,12 +194,12 @@ function GlobalBadges(r: Runtime) {
                 if (!extras?.length) return result;
                 const seen = new Set(result.map((b: Any) => b?.id).filter(Boolean));
                 const next = result.slice();
-                extras.forEach((badge, idx) => {
+                extras.forEach((badge) => {
                     if (!isShown(badge, userId, r.store)) return;
-                    const id = `gb-${userId}-${idx}`;
+                    const id = badgeId(userId, badge);
                     if (seen.has(id)) return;
                     badgeProps[id] = { id, source: { uri: badge.badge }, label: badge.tooltip, userId };
-                    const item = { id, description: badge.tooltip, icon: 'dummy' };
+                    const item = { id, description: badge.tooltip, icon: ' _' };
                     if (r.store.placeLeft) next.unshift(item);
                     else next.push(item);
                     seen.add(id);

@@ -79,7 +79,10 @@ test('every SDK bundle matches its manifest and imports only modules Snow expose
 test('GlobalBadges lists a fetched badge in the badge directory and removes its patches on stop', async () => {
     const directory = { storeName: 'BadgeDirectoryStore', getBadges: () => [{ badge_id: 1 }], getBadgeById: () => undefined };
     const useBadges = { name: 'useBadges', default: () => [] };
-    const plugin = load('mime.globalbadges', { modules: [directory, useBadges] });
+    const saved = [];
+    const fetcher = { fetchBadge: async id => `fetched ${id}`, fetchBadgeSummary: async () => 'summary' };
+    const pending = { setPendingBadgeDisplayOrder: order => { saved.push(order); }, setPendingBadgeVisibility() {}, setPendingBadgeHiddenBadges() {} };
+    const plugin = load('mime.globalbadges', { modules: [directory, useBadges, fetcher, pending] });
     const realFetch = globalThis.fetch;
     globalThis.fetch = async () => new Response(JSON.stringify({ 42: [{ badge: 'https://example.com/a.png', tooltip: 'Equicord Donor', mod: 'equicord' }] }));
     const definition = plugin.create();
@@ -89,6 +92,14 @@ test('GlobalBadges lists a fetched badge in the badge directory and removes its 
         assert.deepEqual([added.name, added.description, added.rarity, added.owned], ['Equicord Donor', 'unlocked by Equicord Donor', 99, true]);
         assert.equal(directory.getBadgeById(added.badge_id, '42').name, 'Equicord Donor');
         assert.deepEqual(useBadges.default({ userId: '42' }).map(b => b.description), ['Equicord — Equicord Donor']);
+        const [shown] = useBadges.default({ userId: '42' });
+        assert.equal(shown.id, `gb-42-equicord-${encodeURIComponent('https://example.com/a.png')}`);
+        assert.notEqual(shown.icon.trim(), '');
+        assert.equal(await fetcher.fetchBadge(shown.id), undefined);
+        assert.equal(await fetcher.fetchBadge('real'), 'fetched real');
+        pending.setPendingBadgeDisplayOrder(['real', shown.id]);
+        pending.setPendingBadgeDisplayOrder(shown.id);
+        assert.deepEqual(saved, [['real']]);
         assert(plugin.hooks.has('BadgeRarityPill'));
         await plugin.stop(definition);
         assert.equal(directory.getBadges('42').length, 1);

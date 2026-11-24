@@ -1,0 +1,23 @@
+{
+    "id": "mime.validuser",
+    "name": "ValidUser",
+    "description": "Automatically resolve unknown mentions and replace @Unknown User.",
+    "version": "1.3.0",
+    "authors": [
+        {
+            "name": "Vendicated",
+            "id": "343383572805058560"
+        },
+        {
+            "name": "Dolfies",
+            "id": "852892297661906993"
+        },
+        {
+            "name": "Mime | N0_.q3",
+            "id": "957164619061932045"
+        }
+    ],
+    "license": "GPL-3.0-or-later",
+    "source": "https://github.com/xMimiez/SnowPlugins/tree/main/plugins/mime.validuser",
+    "entry": "src/index.ts"
+}

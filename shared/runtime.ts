@@ -35,10 +35,12 @@ export function createRuntime(defaults: Settings = {}) {
     const r = {
         meta: plugin, React: React as Any, RN: RN as Any, C, D, h: React.createElement as Any, store: settings,
         common: common as Any,
+        // Bunny-era names the ported plugins still read.
+        metro: metro as Any, host: { metro: { ...metro, common: { ...common, components: discordComponents } } } as Any,
         context: { signal },
         get active() { return !signal.aborted; },
         status: {} as Record<string, Any>,
-        api: { jsx: jsx as Any, storage: { flush }, ui: alerts as Any },
+        api: { jsx: jsx as Any, patcher: patcher as Any, storage: { flush }, ui: alerts as Any },
         own: onDispose as (cleanup: () => unknown) => () => unknown,
         changed() { for (const fn of listeners) fn(); },
         useRefresh() {

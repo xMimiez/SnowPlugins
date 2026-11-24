@@ -1,0 +1,19 @@
+{
+    "id": "mime.previewfile",
+    "name": "PreviewFile",
+    "description": "Unavailable until Snow is open source.",
+    "version": "2.4.0",
+    "authors": [
+        {
+            "name": "mafu",
+            "id": "519760564755365888"
+        },
+        {
+            "name": "Mime | N0_.q3",
+            "id": "957164619061932045"
+        }
+    ],
+    "license": "GPL-3.0-or-later",
+    "source": "https://github.com/xMimiez/SnowPlugins/tree/main/plugins/mime.previewfile",
+    "entry": "src/index.ts"
+}

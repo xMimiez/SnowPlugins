@@ -24,5 +24,9 @@
   "trustedDependencies": [
     "esbuild",
     "@swc/core"
-  ]
+  ],
+  "dependencies": {
+    "jpeg-js": "0.4.4",
+    "pako": "1.0.11"
+  }
 }
