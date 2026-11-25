@@ -90,14 +90,14 @@ const builtInBadges = [
     ["21:8", "Game Variety · Maverick", content("6fc242e9e8259c471a5e4599cd09af5476e622a572ff235883173913bf506103.svg")],
     ["21:9", "Game Variety · Polymath", content("be9a4d119b8e0d7fc1df7e5a12081332637cb9c978a90377cb9c930500b2fbe6.svg")],
     ["21:10", "Game Variety · Universalist", content("fcc34d343451505c642f3397cec2669a2de3a4a410fb968f794b3a1a0dcd1728.svg")],
-    ["1:1", "Nitro · Bronze (1 Month)", web("0386191373eb17c272df.svg")],
-    ["1:2", "Nitro · Silver (3 Months)", web("9d4d362c62da3c985845.svg")],
-    ["1:3", "Nitro · Gold (6 Months)", web("8725fe12ada9afa51c1a.svg")],
-    ["1:4", "Nitro · Platinum (12 Months)", web("746689c803e06be87705.svg")],
-    ["1:5", "Nitro · Diamond (24 Months)", web("f3521e2861ff44a0384d.svg")],
-    ["1:6", "Nitro · Emerald (36 Months)", web("f2b9b02fb22cc6459922.svg")],
-    ["1:7", "Nitro · Ruby (60 Months)", web("ecf86e18838013c9d95a.svg")],
-    ["1:8", "Nitro · Opal (72+ Months)", web("b4fc7a9c37ec2fae36e3.svg")],
+    ["1:1", "Nitro · Bronze (1 Month)", icon("4f33c4a9c64ce221936bd256c356f91f.png")],
+    ["1:2", "Nitro · Silver (3 Months)", icon("4514fab914bdbfb4ad2fa23df76121a6.png")],
+    ["1:3", "Nitro · Gold (6 Months)", icon("2895086c18d5531d499862e41d1155a6.png")],
+    ["1:4", "Nitro · Platinum (12 Months)", icon("0334688279c8359120922938dcb1d6f8.png")],
+    ["1:5", "Nitro · Diamond (24 Months)", icon("0d61871f72bb9a33a7ae568c1fb4f20a.png")],
+    ["1:6", "Nitro · Emerald (36 Months)", icon("11e2d339068b55d3a506cff34d3780f3.png")],
+    ["1:7", "Nitro · Ruby (60 Months)", icon("cd5e2cfd9d7f27a8cdcd3e8a8d5dc9f4.png")],
+    ["1:8", "Nitro · Opal (72+ Months)", icon("5b154df19c53dce2af92c9b61e6be5e2.png")],
     ["12:1", "Server Boost · 1 Month", web("ca18353be0e57a2b3b3132fa1c08d6b4.svg")],
     ["12:2", "Server Boost · 2 Months", web("22f99ed6e34eaca48950254c70f8fe8d.svg")],
     ["12:3", "Server Boost · 3 Months", web("4a2618502278029ce88adeea179ed435.svg")],
@@ -137,6 +137,10 @@ export function readBadges(value: unknown): Badge[] {
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
+    }).map(badge => {
+        // Larp 1.0.0 saved Nitro artwork URLs alongside the selections.
+        const tier = badgeKey(badge.id) === "1" ? builtInBadges.find(entry => entry.id === badge.id) : undefined;
+        return tier && tier.url !== badge.url ? { ...badge, url: tier.url } : badge;
     });
 }
 
@@ -161,7 +165,7 @@ export async function loadBadges(userId: string): Promise<Badge[]> {
     };
     for (const entry of fromDiscord as DirectoryBadge[]) {
         const id = String(entry?.badge_id);
-        if (!/^[1-9]\d*$/.test(id)) continue;
+        if (!/^[1-9]\d*$/.test(id) || id === "1") continue;
         const bundledTiers = builtInBadges.some(badge => badge.id.startsWith(`${id}:`));
         if (badges.has(id) || (!bundledTiers && !entry.tiers?.length)) add(id, entry);
         if (bundledTiers || !Array.isArray(entry.tiers)) continue;

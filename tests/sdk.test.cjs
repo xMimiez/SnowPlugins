@@ -167,6 +167,7 @@ test('Larp saves its own render overrides and leaves native records and other ac
     const badgeDirectory = {
         storeName: 'BadgeDirectoryStore',
         getBadges: () => [
+            { badge_id: 1, name: 'Nitro', simple_icon_url: 'https://discord.com/assets/f3521e2861ff44a0384d.svg' },
             { badge_id: 30, name: 'New Discord Badge', simple_icon_url: 'https://cdn.discordapp.com/badge-icons/test.png' },
             { badge_id: 32, name: 'The Void', tiers: [
                 { key: 1, name: 'Tier One', simple_icon_url: 'https://cdn.discordapp.com/badge-icons/void1.png' },
@@ -250,6 +251,11 @@ test('Larp saves its own render overrides and leaves native records and other ac
     assert.deepEqual(badgeRead, [self.id]);
     const pickerSlots = [];
     const drawPicker = () => render(picker(), pickerSlots);
+    const nitroIcons = picker().props.catalog.filter(badge => badge.id === '1' || badge.id.startsWith('1:'));
+    const starterIcon = 'https://cdn.discordapp.com/assets/content/f61ddf640d11d9bdfaf9de265eb862edf28986b659e545f293b54adf229433af.svg';
+    assert.equal(nitroIcons.length, 9);
+    assert.equal(nitroIcons[0].url, starterIcon);
+    assert(nitroIcons.slice(1).every(badge => /^https:\/\/cdn\.discordapp\.com\/badge-icons\/[a-f0-9]{32}\.png$/.test(badge.url)));
     const gridProps = () => find(drawPicker(), node => node.props.testID === 'mime-larp-badge-grid').props;
     const grid = () => gridProps().children.props.children;
     const position = slot => slot.props.style[1].transform;
@@ -314,7 +320,10 @@ test('Larp saves its own render overrides and leaves native records and other ac
     buttonIn(drawPicker(), 'Unhide Badge').props.onPress();
     selectStage('1', 'Ruby (60 Months)', 9);
     assert.deepEqual(Array.from(picker().props.selected, badge => badge.id), ['30', '22', '1:7']);
+    const rubyIcon = 'https://cdn.discordapp.com/badge-icons/cd5e2cfd9d7f27a8cdcd3e8a8d5dc9f4.png';
+    assert.equal(picker().props.selected.at(-1).url, rubyIcon);
     find(drawPicker(), node => node.props.accessibilityLabel === 'Close badges').props.onPress();
+    assert.equal(find(draw(), node => node.props.badge?.id === '1:7').props.badge.url, rubyIcon);
     draw().props.onRequestClose();
     assert(find(draw(), node => node.props.children === 'Discard unsaved changes?'), 'badge-only edits are dirty');
     button('Keep Editing').props.onPress();
@@ -403,9 +412,17 @@ test('Larp saves its own render overrides and leaves native records and other ac
     current = self;
     await larp.stop(definition);
     assert.equal(names.getName(self), 'real-name');
-    const restarted = load('mime.larp', { modules, saved: larp.state() });
+    const saved = JSON.parse(JSON.stringify(larp.state()));
+    const savedRuby = saved.profiles[self.id].draft.badges.at(-1);
+    savedRuby.url = 'https://discord.com/assets/ecf86e18838013c9d95a.svg';
+    const restarted = load('mime.larp', { modules, saved });
+    restarted.host.react = larp.host.react;
     const next = restarted.create();
     await next.start();
+    const row = restarted.hooks.get(ProfileBadgeRows)(null, React.createElement(ProfileBadgeRows, { userId: self.id }));
+    assert.equal(render(row, []).props.children.at(-1).props.badge.url, rubyIcon);
+    Object.assign(savedRuby, { id: '1', name: 'Discord Nitro' });
+    assert.equal(render(row, []).props.children.at(-1).props.badge.url, starterIcon);
     assert.equal(names.getName(self), 'Local name');
     assert.equal(displayHook.default(self.id).profileEffect.skuId, effectSku);
     assert.equal(nameplateHook.useNameplate({ user: self }).skuId, nameplateSku);
