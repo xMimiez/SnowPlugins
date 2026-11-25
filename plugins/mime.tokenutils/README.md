@@ -1,5 +1,7 @@
 # TokenUtils
 
+**Install URL:** <https://xmimiez.github.io/SnowPlugins/mime.tokenutils/manifest.json>
+
 /get-token and /token-info for the current Authorization token.
 
 ## Network

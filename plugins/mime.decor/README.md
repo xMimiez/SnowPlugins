@@ -1,5 +1,7 @@
 # Decor
 
+**Install URL:** <https://xmimiez.github.io/SnowPlugins/mime.decor/manifest.json>
+
 Browse and equip Decor avatar decorations.
 
 ## Network

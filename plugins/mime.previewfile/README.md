@@ -1,5 +1,7 @@
 # PreviewFile
 
+**Install URL:** <https://xmimiez.github.io/SnowPlugins/mime.previewfile/manifest.json>
+
 Unavailable until Snow is open source.
 
 ## Network

@@ -1,5 +1,7 @@
 # Nighty Tab
 
+**Install URL:** <https://xmimiez.github.io/SnowPlugins/mime.nightytab/manifest.json>
+
 Opens your Nighty web panel inside Discord: an entry in Discord's settings, an optional button in the profile bar, and a "Download Script" action on messages that replies with your Nighty prefix.
 
 ## Network
