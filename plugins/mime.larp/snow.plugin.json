@@ -1,0 +1,10 @@
+{
+    "id": "mime.larp",
+    "name": "Larp",
+    "description": "Preview a different profile for your own account on this device.",
+    "version": "1.0.0",
+    "authors": [{ "name": "Mime | N0_.q3", "id": "957164619061932045" }],
+    "license": "PolyForm-Noncommercial-1.0.0",
+    "source": "https://github.com/xMimiez/SnowPlugins/tree/main/plugins/mime.larp",
+    "entry": "src/index.tsx"
+}

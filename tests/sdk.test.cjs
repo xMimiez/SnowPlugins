@@ -23,16 +23,29 @@ function load(id, { modules = [], saved = {} } = {}) {
         const original = parent[key];
         parent[key] = function (...args) {
             // Like Snow: an array returned from a before patch replaces the arguments.
-            if (kind === 'before') { const replaced = callback(args); return original.apply(this, Array.isArray(replaced) ? replaced : args); }
-            if (kind === 'instead') return callback(args, (...next) => original.apply(this, next));
+            if (kind === 'before') { const replaced = callback.call(this, args); return original.apply(this, Array.isArray(replaced) ? replaced : args); }
+            if (kind === 'instead') return callback.call(this, args, (...next) => original.apply(this, next));
             const result = original.apply(this, args);
-            return callback(args, result) ?? result;
+            return callback.call(this, args, result) ?? result;
         };
         patches.push(key);
         return own(() => { parent[key] = original; });
     };
     let state = { ...saved };
     const RN = { View: 'View', Text: 'Text', Image: 'Image', ScrollView: 'ScrollView', TextInput: 'TextInput', Pressable: 'Pressable', Switch: 'Switch', Platform: { OS: 'ios' }, NativeModules: {}, Dimensions: { get: () => ({ height: 800 }) } };
+    class AnimatedValue {
+        constructor(value) { this.value = value; }
+        setValue(value) { this.value = value; }
+        interpolate() { return this; }
+        getTranslateTransform() { return [{ translateX: this.value.x }, { translateY: this.value.y }]; }
+    }
+    Object.assign(RN, {
+        Keyboard: { dismiss() {} }, Modal: 'Modal', KeyboardAvoidingView: 'KeyboardAvoidingView', SafeAreaView: 'SafeAreaView',
+        Animated: { View: 'AnimatedView', Value: AnimatedValue, ValueXY: AnimatedValue, timing: (value, options) => ({
+            start: () => value.setValue(options.toValue), stop() {},
+        }) }, useWindowDimensions: () => ({ width: 390, height: 800 }),
+        StyleSheet: { create: styles => styles, absoluteFill: {}, hairlineWidth: 1 }, useColorScheme: () => 'dark',
+    });
     const host = {
         '@snow/plugin': { definePlugin: x => x, plugin: { id, name: manifest.name, version: manifest.version }, signal: control.signal, onDispose: own, logger: console, reportError() {} },
         react: React, 'react-native': RN, 'react/jsx-runtime': Object.freeze({ ...require('react/jsx-runtime') }),
@@ -44,6 +57,8 @@ function load(id, { modules = [], saved = {} } = {}) {
             findByProps: (...props) => modules.find(m => props.every(p => p in m)), findByPropsAll: () => [],
             findByName: name => modules.find(m => m.name === name), findByDisplayName: name => modules.find(m => m.displayName === name),
             findByStoreName: name => modules.find(m => m.storeName === name),
+            findByFilePath: filePath => modules.find(m => m.filePath === filePath),
+            waitForFilePath() {},
         },
         '@snow/discord/common': {}, '@snow/discord/common/components': { ActionSheet: 'ActionSheet' }, '@snow/ui/components': {},
         '@snow/ui/sheets': { showSheet() {}, hideSheet() {} }, '@snow/ui/alerts': {}, '@snow/ui/toasts': { showToast() {} },
@@ -86,6 +101,315 @@ test('Nighty Tab registers its settings entry with Snow and hooks the profile ba
     assert.equal(plugin.sections.get('NIGHTY_SECTION').rows.join(), 'NIGHTY');
     assert(plugin.hooks.has('YouScreenNavIconMeasurer'));
     await plugin.stop(definition);
+});
+
+test('Larp saves its own render overrides and leaves native records and other accounts alone', async () => {
+    const self = Object.freeze({ id: '123456789012345678', username: 'real-name', getAvatarURL: () => 'real-avatar' });
+    const other = { id: '123456789012345679', username: 'friend' };
+    let current = self;
+    const users = { storeName: 'UserStore', getCurrentUser: () => current };
+    const names = { filePath: 'utils/UserUtils.tsx', getName: user => user.username, getUserTag: user => user.username };
+    const avatars = {
+        filePath: 'utils/AvatarUtils.tsx',
+        getUserAvatarURL: user => user.id + '/avatar',
+        getUserAvatarSource: user => ({ uri: user.id + '/avatar' }),
+        default: { getUserAvatarURL: user => user.id + '/avatar' },
+    };
+    const sku = '123456789012345680';
+    const effectSku = '123456789012345681';
+    const frameSku = '123456789012345682';
+    const nameplateSku = '123456789012345683';
+    const layer = { order: 'front', assetUrl: 'https://cdn.discordapp.com/test.png' };
+    const products = {
+        [sku]: { type: 0, skuId: sku, asset: 'a_test' },
+        [effectSku]: { type: 1, skuId: effectSku, effects: [] },
+        [frameSku]: { type: 3, skuId: frameSku, layers: [layer] },
+        [nameplateSku]: { type: 2, skuId: nameplateSku, asset: 'test/', label: 'Nameplate', palette: 'blue' },
+    };
+    const lookup = [];
+    const actions = {
+        async fetchCollectiblesProduct(id) { lookup.push(id); return { items: products[id] ? [products[id]] : [] }; },
+        maybeFetchCollectiblesProduct() {},
+    };
+    const actualDisplay = Object.freeze({ profileEffect: null, profileFrame: null });
+    const displayHook = {
+        filePath: 'modules/user_profile/hooks/useDisplayProfile.tsx',
+        default: () => actualDisplay,
+        useDisplayProfileWithFetchEffect: () => actualDisplay,
+        getDisplayProfile: () => actualDisplay,
+    };
+    const nameplateHook = {
+        filePath: 'modules/collectibles/nameplates/hooks/useNameplate.tsx',
+        useNameplate: ({ user }) => user.collectibles?.nameplate,
+    };
+    const decorations = {
+        filePath: 'modules/collectibles/avatar_decorations/useAvatarDecoration.tsx',
+        getAvatarDecoration: () => null,
+    };
+    const messageContent = {
+        filePath: 'modules/messages/native/renderer/createMessageContent.tsx',
+        default: ({ message }) => message.author,
+    };
+    function ProfileBadgeRows() {}
+    function UserProfileBanner() {}
+    function HeaderAvatar() {}
+    class DisplayProfile {
+        constructor(userId) { this.userId = userId; }
+        getBannerURL() { return 'real-banner'; }
+    }
+    const info = { filePath: 'modules/user_profile/native/UserProfilePrimaryInfo.tsx', ProfileBadgeRows };
+    const banner = { filePath: 'modules/user_profile/native/UserProfileBanner.tsx', default: UserProfileBanner };
+    const avatar = { filePath: 'modules/profile_customization/native/HeaderAvatar.tsx', default: HeaderAvatar };
+    const nativeAvatar = { filePath: 'design/void/Avatar/native/Avatar.tsx', default: { type: props => props } };
+    const youName = { filePath: 'modules/main_tabs_v2/native/you_bar/YouBarName.tsx', default: { type: props => props } };
+    const displayProfile = { filePath: 'modules/user_profile/DisplayProfile.tsx', default: DisplayProfile };
+    const badgeRead = [];
+    const badgeDirectory = {
+        storeName: 'BadgeDirectoryStore',
+        getBadges: () => [
+            { badge_id: 30, name: 'New Discord Badge', simple_icon_url: 'https://cdn.discordapp.com/badge-icons/test.png' },
+            { badge_id: 32, name: 'The Void', tiers: [
+                { key: 1, name: 'Tier One', simple_icon_url: 'https://cdn.discordapp.com/badge-icons/void1.png' },
+                { key: 2, name: 'Tier Two', simple_icon_url: 'https://cdn.discordapp.com/badge-icons/void2.png' },
+                { key: 3, name: 'Untrusted artwork', simple_icon_url: 'https://example.test/void3.png' },
+            ] },
+            { badge_id: 12, name: 'Server Booster', simple_icon_url: 'https://cdn.discordapp.com/badge-icons/boost.png' },
+            { badge_id: -8000, name: 'Snow Developer', simple_icon_url: 'https://cdn.discordapp.com/badge-icons/snow.png' },
+            { badge_id: 31, name: 'Untrusted artwork', simple_icon_url: 'https://example.test/badge.png' },
+        ],
+    };
+    const badgeActions = {
+        filePath: 'modules/badges/BadgeDirectoryActionCreators.tsx',
+        async fetchBadgeDirectory(id) { badgeRead.push(id); },
+        updateBadgeSettings() { assert.fail('Larp never updates Discord’s badge settings'); },
+    };
+    const modules = [users, names, avatars, actions, decorations, info, banner, avatar, nativeAvatar, youName, displayProfile, displayHook, nameplateHook, messageContent, badgeDirectory, badgeActions];
+    const larp = load('mime.larp', { modules });
+    // Run the editor callbacks synchronously between renders without needing a native UI.
+    let slots = [], cursor = 0, effects = [];
+    larp.host.react = { ...React, useEffect(effect) { effects.push(effect); }, useState(initial) {
+        const state = slots;
+        const index = cursor++;
+        if (!(index in state)) state[index] = typeof initial === 'function' ? initial() : initial;
+        return [state[index], value => { state[index] = typeof value === 'function' ? value(state[index]) : value; }];
+    }, useRef(value) {
+        const index = cursor++;
+        return slots[index] ??= { current: value };
+    } };
+    const definition = larp.create();
+    await definition.start();
+
+    const native = (id, label) => React.createElement('Shortcut', { key: id, label, onPress() {} });
+    function YouScreenNavIconMeasurer() {}
+    const insert = children => larp.hooks.get('YouScreenNavIconMeasurer')(null, React.createElement(YouScreenNavIconMeasurer, { children }));
+    const stock = [native('quests', 'Quests'), native('shop', 'Shop'), native('nitro', 'Nitro'), native('settings', 'Settings')];
+    const solo = insert(stock);
+    const larpId = 'mime-larp-profile-button';
+    assert.deepEqual(Array.from(solo.props.children, child => child.key), ['quests', 'shop', 'nitro', 'settings', larpId]);
+    const nighty = native('mime-nighty-profile-button', 'Nighty');
+    const layout = bar => bar.type(bar.props).props.children;
+    assert.equal(layout(solo), solo.props.children, 'Larp on its own uses the native row spacing');
+    for (const both of [insert([...stock, nighty]), React.cloneElement(solo, {}, [...stock, nighty, solo.props.children.at(-1)])]) {
+        const row = layout(both);
+        assert.deepEqual(Array.from(row.slice(0, -1), child => child.key), stock.map(child => child.key));
+        assert.equal(row.at(-1).key, nighty.key, 'Nighty recognizes the pair as an existing shortcut');
+        assert.deepEqual(Array.from(row.at(-1).props.children, child => child.key), [nighty.key, larpId]);
+        assert.equal(row.at(-1).props.style.gap, 2);
+    }
+    assert.equal(insert(solo.props.children), undefined);
+
+    const componentSlots = [];
+    const render = (element, state) => { slots = state; cursor = 0; effects = []; return element.type(element.props); };
+    const find = (node, predicate) => {
+        if (!React.isValidElement(node)) return;
+        if (predicate(node)) return node;
+        return React.Children.toArray(node.props.children).map(child => find(child, predicate)).find(Boolean);
+    };
+    const shortcut = solo.props.children.at(-1);
+    render(shortcut, componentSlots).props.children[0].props.onPress();
+    const editor = render(shortcut, componentSlots).props.children[1];
+    const editorSlots = [];
+    const draw = () => render(editor, editorSlots);
+    const fields = {
+        'Display Name': 'Local name', Username: 'local_username',
+        'Avatar URL': 'https://example.test/avatar.png', 'Banner URL': 'https://example.test/banner.png',
+        Pronouns: 'they/them', 'About Me': 'Local bio',
+        'Avatar Decoration SKU ID': sku,
+        'Profile Effect SKU ID': effectSku,
+        'Profile Border SKU ID': frameSku,
+        'Nameplate SKU ID': nameplateSku,
+    };
+    const input = label => find(draw(), node => node.type === 'TextInput' && node.props.accessibilityLabel === label);
+    const buttonIn = (tree, label) => find(tree, node => node.type === 'Pressable' && node.props.children?.props?.children === label);
+    const button = label => buttonIn(draw(), label);
+    find(draw(), node => node.props.accessibilityLabel === 'Badges').props.onPress();
+    const picker = () => find(draw(), node => typeof node.type === 'function' && node.props.catalog);
+    assert.equal(picker().props.selected.length, 0);
+    effects[0]();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(badgeRead, [self.id]);
+    const pickerSlots = [];
+    const drawPicker = () => render(picker(), pickerSlots);
+    const gridProps = () => find(drawPicker(), node => node.props.testID === 'mime-larp-badge-grid').props;
+    const grid = () => gridProps().children.props.children;
+    const position = slot => slot.props.style[1].transform;
+    assert.deepEqual(Array.from(grid().slice(0, 4), slot => position(slot)[1].translateY), [0, 0, 0, 124]);
+    assert.equal(grid().length, 24);
+    assert(!grid().some(slot => /Snow Developer|Untrusted artwork/.test(slot.props.children.props.accessibilityLabel)));
+    const slot = id => grid().find(node => node.key === id);
+    const tile = id => slot(id).props.children;
+    const touch = { nativeEvent: { pageX: 200, pageY: 50 } };
+    const hold = id => {
+        const { props } = tile(id);
+        props.onPressIn(touch);
+        props.onLongPress(touch);
+    };
+    const selectStage = (family, label, options) => {
+        hold(family);
+        buttonIn(drawPicker(), family === '5' ? 'Select House' : 'Select Stage').props.onPress();
+        const stageList = find(drawPicker(), node => node.type === 'ScrollView' && !node.props.testID);
+        assert.equal(stageList.props.children.length, options);
+        find(stageList, node => node.props.accessibilityRole === 'radio' && node.props.children[1].props.children === label).props.onPress();
+    };
+    assert.equal(tile('22').props.accessibilityLabel, 'Discord Staff, hidden');
+    hold('22');
+    buttonIn(drawPicker(), 'Unhide Badge').props.onPress();
+    assert.equal(tile('22').props.accessibilityLabel, 'Discord Staff, visible');
+    hold('30');
+    buttonIn(drawPicker(), 'Unhide Badge').props.onPress();
+    const second = tile('30');
+    second.props.onPressIn({ nativeEvent: { pageX: 200, pageY: 50 } });
+    gridProps().onTouchMove({ nativeEvent: { pageX: 175, pageY: 52 } });
+    assert.equal(position(slot('30'))[0].translateX, 99);
+    gridProps().onTouchMove({ nativeEvent: { pageX: 85, pageY: 50 } });
+    assert.equal(slot('30').props.style[1].zIndex, 10);
+    assert.equal(position(slot('30'))[0].translateX, 9, 'the held badge follows the pointer');
+    drawPicker();
+    effects[0]();
+    assert.equal(position(slot('22'))[0].translateX, 124, 'the neighbor shifts before release');
+    gridProps().onTouchEnd();
+    assert.deepEqual(Array.from(picker().props.selected, badge => badge.id), ['30', '22']);
+    hold('22');
+    buttonIn(drawPicker(), 'Hide Badge').props.onPress();
+    assert.equal(tile('22').props.accessibilityLabel, 'Discord Staff, hidden');
+    hold('22');
+    buttonIn(drawPicker(), 'Unhide Badge').props.onPress();
+    selectStage('1', 'Opal (72+ Months)', 9);
+    selectStage('5', 'Balance', 3);
+    selectStage('12', '2 Years', 9);
+    selectStage('17', 'Legend', 6);
+    selectStage('18', 'Primordial', 10);
+    selectStage('19', 'Phenomenon', 10);
+    selectStage('20', 'Eternal', 10);
+    selectStage('21', 'Universalist', 10);
+    selectStage('32', 'Tier Two', 2);
+    assert.deepEqual(Array.from(picker().props.selected, badge => badge.id), ['30', '22']);
+    assert.equal(tile('1').props.accessibilityLabel, 'Nitro · Opal (72+ Months), hidden');
+    assert.equal(tile('17').props.accessibilityLabel, 'Gifting · Legend, hidden');
+    assert.equal(tile('12').props.accessibilityLabel, 'Server Boost · 2 Years, hidden');
+    assert.equal(tile('5').props.accessibilityLabel, 'HypeSquad Balance, hidden');
+    assert.equal(tile('4').props.accessibilityLabel, 'HypeSquad Events, hidden');
+    assert.equal(tile('32').props.accessibilityLabel, 'The Void · Tier Two, hidden');
+    hold('1');
+    buttonIn(drawPicker(), 'Unhide Badge').props.onPress();
+    selectStage('1', 'Ruby (60 Months)', 9);
+    assert.deepEqual(Array.from(picker().props.selected, badge => badge.id), ['30', '22', '1:7']);
+    find(drawPicker(), node => node.props.accessibilityLabel === 'Close badges').props.onPress();
+    draw().props.onRequestClose();
+    assert(find(draw(), node => node.props.children === 'Discard unsaved changes?'), 'badge-only edits are dirty');
+    button('Keep Editing').props.onPress();
+    input('Avatar URL').props.onChangeText('http://example.test/avatar.png');
+    await button('Save').props.onPress();
+    assert(find(draw(), node => node.props.accessibilityRole === 'alert'));
+    assert.deepEqual(Object.keys(larp.state().profiles), []);
+    for (const [label, value] of Object.entries(fields)) {
+        input(label).props.onChangeText(value);
+    }
+    input('Nameplate SKU ID').props.onChangeText('invalid');
+    await button('Save').props.onPress();
+    assert.equal(lookup.length, 0);
+    input('Nameplate SKU ID').props.onChangeText(effectSku);
+    await button('Save').props.onPress();
+    assert.equal(find(draw(), node => node.props.accessibilityRole === 'alert').props.children, "This SKU ID didn't resolve to a nameplate.");
+    assert.deepEqual(Object.keys(larp.state().profiles), []);
+    input('Nameplate SKU ID').props.onChangeText(nameplateSku);
+    draw().props.onRequestClose();
+    assert(find(draw(), node => node.props.children === 'Discard unsaved changes?'));
+    assert.deepEqual(Object.keys(larp.state().profiles), []);
+    button('Keep Editing').props.onPress();
+    await button('Save').props.onPress();
+    assert.deepEqual(lookup, [sku, effectSku, frameSku, effectSku, nameplateSku], 'reads only collectible metadata and reuses successful lookups');
+    assert.equal(render(shortcut, componentSlots).props.children[1], null);
+    assert.equal(larp.state().profiles[self.id].draft.bio, 'Local bio');
+    assert.deepEqual(Array.from(larp.state().profiles[self.id].draft.badges, badge => badge.id), ['30', '22', '1:7']);
+    assert.equal(larp.state().profiles[self.id].draft.badgeStages['18'], '18:10');
+    assert.equal(larp.state().profiles[self.id].draft.badgeStages['17'], '17:6');
+    assert.equal(larp.state().profiles[self.id].draft.badgeStages['32'], '32:2');
+    assert.equal(names.getName(self), 'Local name');
+    assert.equal(names.getUserTag(self), 'local_username');
+    assert.equal(avatars.getUserAvatarSource(self).uri, fields['Avatar URL']);
+    assert.equal(avatars.default.getUserAvatarURL(self), fields['Avatar URL']);
+    assert.equal(decorations.getAvatarDecoration(self).asset, 'a_test');
+    assert.equal(displayHook.default(self.id).profileEffect.skuId, effectSku);
+    assert.equal(displayHook.useDisplayProfileWithFetchEffect(self.id).profileFrame.layers[0], layer);
+    assert.equal(displayHook.getDisplayProfile(other.id), actualDisplay);
+    assert.equal(actualDisplay.profileEffect, null);
+    assert.equal(nameplateHook.useNameplate({ user: self }).skuId, nameplateSku);
+    assert.equal(nameplateHook.useNameplate({ user: other }), undefined);
+    assert.equal(self.collectibles, undefined);
+    function UserProfilePrimaryInfo() {}
+    function UserProfileAboutMeCard() {}
+    const display = (component, props, key = component.name) => {
+        const element = React.createElement(component, props);
+        return larp.hooks.get(key)(null, element);
+    };
+    const primary = render(display(UserProfilePrimaryInfo, { user: self }), []).props;
+    assert.equal(primary.pronouns, 'they/them');
+    assert.equal(primary.user.username, 'local_username');
+    const bannerProps = render(display(UserProfileBanner, { user: self, displayProfile: {} }, UserProfileBanner), []).props;
+    assert.equal(bannerProps.displayProfile.getBannerURL(), fields['Banner URL']);
+    assert.equal(bannerProps.pendingBanner.imageUri, fields['Banner URL']);
+    assert.equal(new DisplayProfile(self.id).getBannerURL(), fields['Banner URL']);
+    assert.equal(new DisplayProfile(other.id).getBannerURL(), 'real-banner');
+    const avatarProps = render(display(HeaderAvatar, { user: self }, HeaderAvatar), []).props;
+    assert.equal(avatarProps.pendingAvatarSrc, fields['Avatar URL']);
+    assert.equal(avatarProps.pendingAvatarDecoration.skuId, sku);
+    assert.equal(display(HeaderAvatar, { user: other }, HeaderAvatar), undefined);
+    const youAvatar = nativeAvatar.default.type({ user: self });
+    assert.equal(youAvatar.source.uri, fields['Avatar URL']);
+    assert.equal(youAvatar.avatarDecoration.skuId, sku);
+    assert.equal(nativeAvatar.default.type({ user: other }).source, undefined);
+    assert.equal(youName.default.type({ userId: self.id }).username, 'Local name');
+    assert.equal(youName.default.type({ userId: other.id, username: 'friend' }).username, 'friend');
+    assert.equal(render(display(UserProfileAboutMeCard, { userId: self.id }), []).props.pendingBio, 'Local bio');
+    assert.deepEqual(Array.from(render(display(ProfileBadgeRows, { userId: self.id }, ProfileBadgeRows), []).props.children,
+        node => node.props.badge.name), ['New Discord Badge', 'Discord Staff', 'Nitro · Ruby (60 Months)']);
+    assert.equal(display(ProfileBadgeRows, { userId: other.id }, ProfileBadgeRows), undefined);
+    assert.equal(display(UserProfilePrimaryInfo, { user: other }), undefined);
+    assert.equal(self.username, 'real-name');
+    assert.equal(names.getName(other), 'friend');
+    assert.equal(decorations.getAvatarDecoration(other), null);
+    const message = Object.freeze({ author: self });
+    const renderedAuthor = messageContent.default({ message });
+    assert.equal(renderedAuthor.username, 'local_username');
+    assert.equal(renderedAuthor.globalName, 'Local name');
+    assert.equal(renderedAuthor.getAvatarURL(), fields['Avatar URL']);
+    assert.equal(message.author, self);
+    assert.equal(messageContent.default({ message: { author: other } }), other);
+    current = other;
+    assert.equal(names.getName(self), 'real-name');
+    assert.equal(displayHook.default(self.id), actualDisplay);
+    assert.equal(nameplateHook.useNameplate({ user: self }), undefined);
+    current = self;
+    await larp.stop(definition);
+    assert.equal(names.getName(self), 'real-name');
+    const restarted = load('mime.larp', { modules, saved: larp.state() });
+    const next = restarted.create();
+    await next.start();
+    assert.equal(names.getName(self), 'Local name');
+    assert.equal(displayHook.default(self.id).profileEffect.skuId, effectSku);
+    assert.equal(nameplateHook.useNameplate({ user: self }).skuId, nameplateSku);
+    await restarted.stop(next);
 });
 
 // Discord's message record: `set` returns a changed copy.
