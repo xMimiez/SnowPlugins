@@ -315,6 +315,7 @@ function NitroSniper(r: Runtime) {    const { h, React } = r, { Page, Text, Butt
     function armAutoPress(ms = 60000) {
         armedUntil = Math.max(armedUntil, Date.now() + ms);
         sweeps = 0;
+        autoPressFired = false; // re-arm: each claim gets a fresh press
         console.log("[NitroSniper] armed autoPress for", ms, "ms");
         startScan(350);
     }
