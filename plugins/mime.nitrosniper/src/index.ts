@@ -28,18 +28,102 @@ function NitroSniper(r: Runtime) {    const { h, React } = r, { Page, Text, Butt
     // React.createElement, so both are hooked. Each arm window allows several
     // presses: the gift sheet's Accept and the captcha sheet's Confirm both count.
     const ACCEPT_BUTTON_RE = /^(accept|redeem(?: now)?|claim|get nitro|confirm|i'?m not a robot|verify)\b/i;
-    const autoPress = { armedUntil: 0, pressesLeft: 0 };
-    function armAutoPress(ms = 60000) { autoPress.armedUntil = Date.now() + ms; autoPress.pressesLeft = 4; }
+    // Always-on watch: the human-verification prompt can appear at any time (after a redeem
+    // attempt, on app events), not only mid-claim, so the hook stays armed for the whole
+    // plugin lifetime with a short cooldown instead of a one-shot per claim.
+    const autoPress = { nextAllowed: 0, mountedSweep: 0 };
+    function armAutoPress() { autoPress.nextAllowed = 0; autoPress.mountedSweep = 0; }
+    const pressDelayMs = 50; // as fast as possible while the pressable settles
+    const pressCooldownMs = 1500; // one press per 1.5s max
+    const sweepIntervalMs = 700; // walk mounted fibers this often while a sheet may be up
+    function doPress(label: string, press: Any) {
+        autoPress.nextAllowed = Date.now() + pressCooldownMs;
+        r.toast(`Pressing "${label.slice(0, 40)}"…`, "ShieldIcon");
+        setTimeout(() => { if (r.active && !stopped) { try { press({}); } catch { /* sheet may have closed */ } } }, pressDelayMs);
+    }
     function tryAutoPress(props: Any): boolean {
-        if (!r.active || stopped || autoPress.pressesLeft <= 0 || Date.now() > autoPress.armedUntil) return false;
+        if (!r.active || stopped) return false;
+        if (Date.now() < autoPress.nextAllowed) return false;
         const label = String(props?.accessibilityLabel ?? props?.label ?? props?.text ?? "");
         if (typeof props?.onPress !== "function" || !ACCEPT_BUTTON_RE.test(label)) return false;
-        autoPress.pressesLeft--;
-        const press = props.onPress;
-        r.toast(`Pressing "${label.slice(0, 40)}"…`, "ShieldIcon");
-        setTimeout(() => { if (r.active && !stopped) { try { press({}); } catch { /* sheet may have closed */ } } }, 350);
+        doPress(label, props.onPress);
         return true;
     }
+    // Backstop for a sheet that mounted before the hooks registered (or never re-renders):
+    // walk the live fiber tree from React's DevTools hook and press the matching
+    // button's own onPress directly. Runs every sweepIntervalMs in the background.
+    function labelOf(props: Any): string {
+        if (!props) return "";
+        const direct = String(props.accessibilityLabel ?? props.label ?? props.text ?? "");
+        if (direct) return direct;
+        // Discord buttons often put the text only in children elements.
+        try {
+            const kids = props.children;
+            if (typeof kids === "string") return kids;
+            if (Array.isArray(kids)) {
+                for (const k of kids) {
+                    if (typeof k === "string" && k.trim()) return k;
+                    const t = k?.props?.children;
+                    if (typeof t === "string" && t.trim()) return t;
+                }
+            }
+            const one = props.children?.props?.children;
+            if (typeof one === "string") return one;
+        } catch { /* keep "" */ }
+        return "";
+    }
+    function sweepMounted(): boolean {
+        if (!r.active || stopped) return false;
+        const now = Date.now();
+        if (now < autoPress.nextAllowed || now < autoPress.mountedSweep) return false;
+        autoPress.mountedSweep = now + sweepIntervalMs;
+        try {
+            const g = globalThis as Any;
+            const hook = g.__REACT_DEVTOOLS__?.hook ?? g.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+            if (!hook || typeof hook.getFiberRoots !== "function") return false;
+            let pressed = false;
+            const queue: Any[] = [];
+            const seen = new Set<Any>();
+            const visit = (fiber: Any, budget: { n: number }) => {
+                while (fiber && budget.n > 0 && !pressed) {
+                    if (seen.has(fiber)) return;
+                    seen.add(fiber);
+                    budget.n--;
+                    try {
+                        const props = fiber.memoizedProps;
+                        const label = labelOf(props);
+                        if (typeof props?.onPress === "function" && label && ACCEPT_BUTTON_RE.test(label)) {
+                            doPress(label, props.onPress);
+                            pressed = true;
+                            return;
+                        }
+                    } catch { /* walk on */ }
+                    if (fiber.child) queue.push(fiber.child);
+                    if (fiber.sibling) queue.push(fiber.sibling);
+                    fiber = null as Any;
+                }
+            };
+            for (const entry of hook.renderers ?? []) {
+                const rendererId = entry?.[0];
+                const roots = hook.getFiberRoots(rendererId);
+                if (!(roots instanceof Set)) continue;
+                for (const root of roots) {
+                    const fiber = root?.current ?? root;
+                    if (fiber) queue.push(fiber);
+                }
+            }
+            const budget = { n: 60000 };
+            while (queue.length && !pressed && budget.n > 0) {
+                const f = queue.shift();
+                if (f && f.child) queue.push(f.child);
+                if (f && f.sibling) queue.push(f.sibling);
+                if (f && f.memoizedProps) visit(f, budget);
+            }
+            return pressed;
+        } catch { /* DevTools hook unavailable */ }
+        return false;
+    }
+    const sweepTimer = setInterval(() => { void sweepMounted(); }, sweepIntervalMs + 300);
     r.patch("after", React, "createElement", (args: Any[], result: Any) => {
         if (tryAutoPress(args && args[1])) return result;
         if (!result?.props) return result;
@@ -192,7 +276,13 @@ function NitroSniper(r: Runtime) {    const { h, React } = r, { Page, Text, Butt
             h(Button, { text: "Send test webhook", variant: "secondary", onPress: () => webhook({ content: "NitroSniper Snow webhook test" }).then(() => r.toast(r.store.webhookUrl ? "Test sent" : "Set a webhook first")).catch(e => r.error("Webhook test", e)) }),
             h(Text, { muted: true }, "Claim cycle: claim link, auto-press the Accept and human-verification Confirm buttons, solve hCaptcha, and toast each result. Only new live messages are processed."));
     }
-    return { start() { started = Date.now(); r.subscribe("MESSAGE_CREATE", e => { try { receive(e); } catch (err) { r.error("Message handler", err); } }); }, stop() { stopped = true; solver.dispose(); queue.length = 0; clearTimeout(waitTimer); releaseWait?.(); }, Settings, receive, stats };
+    return { start() {
+        started = Date.now();
+        // Pre-warm the toast icon pipeline: resolving an icon name lazily initializes
+        // every Discord module once (a long stall). Pay it here at start, not mid-claim.
+        setTimeout(() => { try { r.toast("NitroSniper ready", "ShieldIcon"); } catch { /* warm-up best effort */ } }, 1500);
+        r.subscribe("MESSAGE_CREATE", e => { try { receive(e); } catch (err) { r.error("Message handler", err); } });
+    }, stop() { stopped = true; clearInterval(sweepTimer); solver.dispose(); queue.length = 0; clearTimeout(waitTimer); releaseWait?.(); }, Settings, receive, stats };
 }
 NitroSniper.defaults = { ignoreOwnGiftLinks: false, webhookUrl: "" };
 
