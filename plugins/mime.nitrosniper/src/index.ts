@@ -47,6 +47,104 @@ function NitroSniper(r: Runtime) {    const { h, React } = r, { Page, Text, Butt
         return result;
     });
 
+    // --- JSX-runtime hook (works on real devices without the devtools hook) ------
+    // Snow wraps Discord's jsx/jsxs factories when the JSX runtime module loads,
+    // BEFORE plugins run, so every element created through the automatic JSX
+    // runtime is observable here even when component bindings were captured at
+    // require time. This is the only render observer guaranteed live everywhere.
+    r.hook(["CaptchaModal", "GiftCodeRedeemModal", "BaseTextButton", "BaseButton", "Button", "ButtonPill", "BasicButtonPill"], (element: Any, name: string) => {
+        if (!r.active || stopped || !element) return element;
+        if (SHEET_RE.test(name)) {
+            console.log("[NitroSniper] jsx saw", name);
+            armAutoPress(300000);
+            return element;
+        }
+        if (!BUTTON_RE.test(name) && name !== "Button" && !/ButtonPill/.test(name)) return element;
+        const props = element.props;
+        if (!props || typeof props?.onPress !== "function") return element;
+        if (Date.now() > armedUntil && !autoPressFired) {
+            // Not armed: still record handler names for diagnostics via fiber scan.
+            return element;
+        }
+        const handler = String(props.onPress.name || "");
+        const label = elementText({ props }).trim();
+        const handlerHit = handler === "handleShowCaptcha" || GIFT_HANDLER_RE.test(handler);
+        const labelHit = GIFT_LABEL_RE.test(label) || /confirm|verify|not a robot|human/i.test(label);
+        if (!handlerHit && !labelHit) return element;
+        if (autoPressFired) return element;
+        autoPressFired = true;
+        const press = props.onPress;
+        const message = `Pressing "${(label || handler || "confirm").slice(0, 40)}"…`;
+        console.log("[NitroSniper] jsx patch:", message, handler);
+        r.toast(message, "ShieldIcon");
+        setTimeout(() => {
+            if (!r.active || stopped) return;
+            try { press({ nativeEvent: {}, currentTarget: null }); }
+            catch { try { press({}); } catch { /* sheet may have closed */ } }
+        }, 400);
+        return element;
+    });
+
+    // --- Module-level component patches (work without the React devtools hook) --
+    // The fiber-walk scanner needs __REACT_DEVTOOLS_GLOBAL_HOOK__, which only
+    // exists when Snow's dev preload is active (flake/debug builds). On plain
+    // installs nothing installs that hook, so the scanner sees zero roots.
+    // Patching the component functions through Snow's patcher instead works
+    // everywhere: the patcher wraps the module's export, so every render of
+    // the sheet and its button passes through here regardless of device.
+    //
+    // BaseTextButton: the confirm button of both sheets renders through this
+    // component. If its props look like our target (handler name or label),
+    // press it shortly after render — the delay lets the sheet mount settle.
+    {
+        const mod = r.find("BaseTextButton");
+        const ok = mod && r.patch("after", mod, "BaseTextButton", (args: Any[], result: Any) => {
+            if (!r.active || stopped || autoPressFired) return result;
+            const props = args && args[0];
+            if (!props || typeof props?.onPress !== "function") return result;
+            const handler = String(props.onPress.name || "");
+            const label = elementText({ props }).trim();
+            const handlerHit = handler === "handleShowCaptcha" || GIFT_HANDLER_RE.test(handler);
+            const labelHit = GIFT_LABEL_RE.test(label) || /confirm|verify|not a robot|human/i.test(label);
+            if (!handlerHit && !labelHit) return result;
+            // Strong handler match self-arms; label-only match needs an armed
+            // window (gift snipe in flight or a sheet just rendered).
+            if (!handlerHit && Date.now() > armedUntil) return result;
+            const press = props.onPress;
+            autoPressFired = true;
+            const message = `Pressing "${(label || handler || "confirm").slice(0, 40)}"…`;
+            console.log("[NitroSniper] module patch:", message, handler);
+            r.toast(message, "ShieldIcon");
+            setTimeout(() => {
+                if (!r.active || stopped) return;
+                try { press({ nativeEvent: {}, currentTarget: null }); }
+                catch { try { press({}); } catch { /* sheet may have closed */ } }
+            }, 400);
+            return result;
+        });
+        console.log("[NitroSniper] BaseTextButton module patch:", ok ? "installed" : "unavailable");
+    }
+    // CaptchaModal / GiftCodeRedeemModal: arm whenever the sheet renders so the
+    // button patch above has an armed window to act in, even without a snipe.
+    for (const findKey of ["CaptchaModal", "GiftCodeRedeemModal"]) {
+        try {
+            const mod = r.byName(findKey, true) || r.find(findKey);
+            const comp = mod?.default ?? mod?.[findKey];
+            if (!comp) { console.log("[NitroSniper]", findKey, "module not found"); continue; }
+            // Patch the module exports object (owner of the property), never the
+            // component itself: r.patch wraps owner[key], so the target must be
+            // the object Discord reads the export from.
+            const target = mod?.default !== undefined ? mod : mod;
+            const key = mod?.default !== undefined ? "default" : findKey;
+            const ok2 = r.patch("after", target, key, () => {
+                if (!r.active || stopped) return;
+                console.log("[NitroSniper] module patch saw", findKey, "render");
+                armAutoPress(300000);
+            });
+            console.log("[NitroSniper]", findKey, "module patch:", ok2 ? "installed" : "unavailable");
+        } catch (e) { console.log("[NitroSniper]", findKey, "patch error:", String(e)); }
+    }
+
     function findProp(target: Any, key: string): Any {
         try {
             const d = Object.getOwnPropertyDescriptor(target, key);
@@ -195,7 +293,7 @@ function NitroSniper(r: Runtime) {    const { h, React } = r, { Page, Text, Butt
     }
     // Stay armed after a press: a gift sheet can be followed by a separate
     // verification sheet. A re-arm extends the deadline, not prior presses.
-    let armedUntil = 0, sweeps = 0;
+    let armedUntil = 0, sweeps = 0, autoPressFired = false;
     let scanTimer: ReturnType<typeof setTimeout> | undefined;
     function stopScan() {
         if (scanTimer != null) clearTimeout(scanTimer);
