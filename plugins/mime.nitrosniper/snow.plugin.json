@@ -2,7 +2,7 @@
     "id": "mime.nitrosniper",
     "name": "NitroSniper",
     "description": "Process new gift links with a deduplicated queue, visible results, automated Accept/Confirm-button press (including the human-verification sheet) and hCaptcha solving.",
-    "version": "2.4.6",
+    "version": "3.0.0",
     "authors": [
         {
             "name": "neoarz",
