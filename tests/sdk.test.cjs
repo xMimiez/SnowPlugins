@@ -76,50 +76,6 @@ test('every SDK bundle matches its manifest and imports only modules Snow expose
     }
 });
 
-test('GlobalBadges lists a fetched badge in the badge directory and removes its patches on stop', async () => {
-    const directory = { storeName: 'BadgeDirectoryStore', getBadges: () => [{ badge_id: 1 }], getBadgeById: () => undefined };
-    const useBadges = { name: 'useBadges', default: () => [] };
-    const saved = [];
-    const fetcher = { fetchBadge: async id => `fetched ${id}`, fetchBadgeSummary: async () => 'summary' };
-    const pending = { setPendingBadgeDisplayOrder: order => { saved.push(order); }, setPendingBadgeVisibility() {}, setPendingBadgeHiddenBadges() {} };
-    const plugin = load('mime.globalbadges', { modules: [directory, useBadges, fetcher, pending] });
-    const realFetch = globalThis.fetch;
-    globalThis.fetch = async () => new Response(JSON.stringify({ 42: [{ badge: 'https://example.com/a.png', tooltip: 'Equicord Donor', mod: 'equicord' }] }));
-    const definition = plugin.create();
-    try {
-        await definition.start();
-        const [, added] = directory.getBadges('42');
-        assert.deepEqual([added.name, added.description, added.rarity, added.owned], ['Equicord Donor', 'unlocked by Equicord Donor', 99, true]);
-        assert.equal(directory.getBadgeById(added.badge_id, '42').name, 'Equicord Donor');
-        assert.deepEqual(useBadges.default({ userId: '42' }).map(b => b.description), ['Equicord — Equicord Donor']);
-        const [shown] = useBadges.default({ userId: '42' });
-        assert.equal(shown.id, `gb-42-equicord-${encodeURIComponent('https://example.com/a.png')}`);
-        assert.notEqual(shown.icon.trim(), '');
-        assert.equal(await fetcher.fetchBadge(shown.id), undefined);
-        assert.equal(await fetcher.fetchBadge('real'), 'fetched real');
-        pending.setPendingBadgeDisplayOrder(['real', shown.id]);
-        pending.setPendingBadgeDisplayOrder(shown.id);
-        assert.deepEqual(saved, [['real']]);
-        assert(plugin.hooks.has('BadgeRarityPill'));
-        await plugin.stop(definition);
-        assert.equal(directory.getBadges('42').length, 1);
-    } finally { globalThis.fetch = realFetch; await plugin.stop(definition); }
-});
-
-test('Pin DMs saves categories per account through the settings store and hooks the DM list', async () => {
-    const LegendList = () => null;
-    const users = { storeName: 'UserStore', getCurrentUser: () => ({ id: '7' }) };
-    const plugin = load('mime.pindms', { modules: [users, { AnimatedLegendList: LegendList }], saved: { userBasedCategoryList: { 7: [{ id: 'a', name: 'Work', color: 1, collapsed: false, channels: ['100'] }] } } });
-    const definition = plugin.create();
-    await definition.start();
-    assert(plugin.hooks.has(LegendList));
-    assert.equal(typeof definition.settings, 'function');
-    // Saved data from before the start is kept, and the defaults fill in the rest.
-    assert.equal(plugin.state().userBasedCategoryList[7][0].name, 'Work');
-    assert.equal(plugin.state().nativeList, true);
-    await plugin.stop(definition);
-});
-
 test('Nighty Tab registers its settings entry with Snow and hooks the profile bar', async () => {
     const plugin = load('mime.nightytab');
     const definition = plugin.create();
