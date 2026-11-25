@@ -24,20 +24,39 @@ function NitroSniper(r: Runtime) {    const { h, React } = r, { Page, Text, Butt
     // interstitial: "Wait! Are you human?" / "Please confirm you're not a robot."
     // with a blue Confirm BaseButton. Armed for the whole claim window so a
     // verification sheet that mounts mid-redeem still gets pressed.
+    // React Native 0.8x builds elements through the JSX runtime (jsx/jsxs), not
+    // React.createElement, so both are hooked. Each arm window allows several
+    // presses: the gift sheet's Accept and the captcha sheet's Confirm both count.
     const ACCEPT_BUTTON_RE = /^(accept|redeem(?: now)?|claim|get nitro|confirm|i'?m not a robot|verify)\b/i;
-    const autoPress = { armedUntil: 0, fired: false };
-    function armAutoPress(ms = 60000) { autoPress.armedUntil = Date.now() + ms; autoPress.fired = false; }
-    r.patch("after", React, "createElement", (args: Any[], result: Any) => {
-        if (!r.active || stopped || autoPress.fired || Date.now() > autoPress.armedUntil) return result;
-        const props = args && args[1];
+    const autoPress = { armedUntil: 0, pressesLeft: 0 };
+    function armAutoPress(ms = 60000) { autoPress.armedUntil = Date.now() + ms; autoPress.pressesLeft = 4; }
+    function tryAutoPress(props: Any): boolean {
+        if (!r.active || stopped || autoPress.pressesLeft <= 0 || Date.now() > autoPress.armedUntil) return false;
         const label = String(props?.accessibilityLabel ?? props?.label ?? props?.text ?? "");
-        if (typeof props?.onPress !== "function" || !ACCEPT_BUTTON_RE.test(label)) return result;
-        autoPress.fired = true;
+        if (typeof props?.onPress !== "function" || !ACCEPT_BUTTON_RE.test(label)) return false;
+        autoPress.pressesLeft--;
         const press = props.onPress;
         r.toast(`Pressing "${label.slice(0, 40)}"…`, "ShieldIcon");
         setTimeout(() => { if (r.active && !stopped) { try { press({}); } catch { /* sheet may have closed */ } } }, 350);
+        return true;
+    }
+    r.patch("after", React, "createElement", (args: Any[], result: Any) => {
+        if (tryAutoPress(args && args[1])) return result;
+        if (!result?.props) return result;
+        tryAutoPress(result.props); // class components put props on the element
         return result;
     });
+    const jsxModule = r.find("jsx", "jsxs");
+    for (const candidate of jsxModule ? [jsxModule] : []) {
+        for (const key of ["jsx", "jsxs"] as const) {
+            if (typeof candidate?.[key] !== "function") continue;
+            r.patch("after", candidate, key, (args: Any[], result: Any) => {
+                if (!result?.props || result.props === (args && args[1])) return result;
+                tryAutoPress(result.props);
+                return result;
+            });
+        }
+    }
 
     function redeemViaActions(actions: Any, code: string): Promise<null | void> {
         // Calls the same module the native Accept button uses. Returns null when
