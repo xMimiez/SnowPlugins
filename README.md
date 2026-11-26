@@ -21,7 +21,7 @@ Plugins for Snow, built with the Snow plugin SDK.
 
 Snow Plugins is a Snow repository: add it to Snow once, then browse, install and update its plugins from Snow's Plugins page. Each plugin is a TypeScript module in `plugins/<id>/` written against Snow's own modules, and the published bundles are built from this repository by its Publish workflow.
 
-GlobalBadges and Pin DMs have been removed because they’re now built directly into [Snow](https://github.com/xMimiez/snow). Better Delete is part of Snow’s built-in Message Logger.
+[GlobalBadges](./plugins/mime.globalbadges/) and [Pin DMs](./plugins/mime.pindms/) are available here for Snow releases that lack the built-in versions. If your Snow build includes either feature, use one version at a time.
 
 ## Requirements and installation
 
@@ -51,6 +51,7 @@ Repo managed by [xMimiez](https://github.com/xMimiez).
 Snow Plugins is licensed under the [PolyForm Noncommercial License 1.0.0](./LICENSE), with these exceptions:
 
 - `plugins/mime.nitrosniper/` is licensed under MIT, the license of the NitroSniper code it is ported from.
+- `plugins/mime.pindms/` is licensed under GPL-3.0-or-later.
 - `shared/action-sheet.ts` is licensed under MPL-2.0.
 - The Snow logo is licensed under the [MIT License](./assets/snow/LICENSE).
 - The build scripts at the repository root and `types/` are generated from Snow and keep Snow's licenses; see `types/snow/notices/`.
