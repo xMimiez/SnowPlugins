@@ -76,7 +76,6 @@ function NitroSniper(r: Runtime) {    const { h, React } = r, { Page, Text, Butt
         const press = props.onPress;
         const message = `Pressing "${(label || handler || "confirm").slice(0, 40)}"…`;
         console.log("[NitroSniper] jsx patch:", message, handler);
-        r.toast(message, "ShieldIcon");
         setTimeout(() => {
             if (!r.active || stopped) return;
             try { press({ nativeEvent: {}, currentTarget: null }); }
@@ -114,7 +113,6 @@ function NitroSniper(r: Runtime) {    const { h, React } = r, { Page, Text, Butt
             autoPressFired = true;
             const message = `Pressing "${(label || handler || "confirm").slice(0, 40)}"…`;
             console.log("[NitroSniper] module patch:", message, handler);
-            r.toast(message, "ShieldIcon");
             setTimeout(() => {
                 if (!r.active || stopped) return;
                 try { press({ nativeEvent: {}, currentTarget: null }); }
@@ -288,7 +286,6 @@ function NitroSniper(r: Runtime) {    const { h, React } = r, { Page, Text, Butt
             console.log("[NitroSniper] press failed:", handler, String(e));
             return { ...stats, pressed: false };
         }
-        r.toast(message, "ShieldIcon");
         return { ...stats, pressed: true };
     }
     // Stay armed after a press: a gift sheet can be followed by a separate
@@ -359,6 +356,7 @@ function NitroSniper(r: Runtime) {    const { h, React } = r, { Page, Text, Butt
         running = true;
         try {
             while (queue.length && r.active && !stopped) {
+                const claimStart = Date.now();
                 const item = queue.shift();
                 let success = false, result = "", giftType;
                 r.toast("Claiming gift…", "GiftIcon");
@@ -418,9 +416,10 @@ function NitroSniper(r: Runtime) {    const { h, React } = r, { Page, Text, Butt
                 r.toast(result, success ? "NitroWheelIcon" : "CircleXIcon");
                 if (r.store.webhookUrl) {
                     try {
+                        const fields = [];
+                        fields.push({ name: "Claim time", value: `${Date.now() - claimStart}ms` });
                         try { const resolved = (await r.discord(`/entitlements/gift-codes/${item.code}?with_application=false&with_subscription_plan=true`)).json(); giftType = resolved?.subscription_plan?.name || resolved?.store_listing?.sku?.name; } catch { /* Optional enrichment; claim result remains visible. */ }
                         if (!r.active || stopped) return;
-                        const fields = [];
                         if (giftType) fields.push({ name: "Gift type", value: String(giftType).slice(0, 1024) });
                         if (item.authorId) fields.push({ name: "Sent by", value: `[${String(item.authorName || item.authorId).replace(/[\[\]\\]/g, "")}](https://discord.com/users/${item.authorId})` });
                         if (item.channelId && item.messageId) fields.push({ name: "Message", value: `https://discord.com/channels/${item.guildId || "@me"}/${item.channelId}/${item.messageId}` });
